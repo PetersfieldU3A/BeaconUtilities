@@ -10,7 +10,7 @@ from pathlib import Path
 
 from invoke import task
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 __author__ = "T. J. Willans"
 __date__ = "2026-04-27"
 __copyright__ = "Copyright 2026, MEADC Ltd"
@@ -97,7 +97,7 @@ def _parse_version(filename: str) -> tuple[int, int, int] | None:
 @task
 def docs(c):
     """Start MkDocs live server."""
-    c.run(f"{PYTHON} -m mkdocs serve --livereload", pty=False)
+    c.run(f"{PYTHON} -m mkdocs serve --livereload --dev-addr 127.0.0.1:8020", pty=False)
 
 
 @task
@@ -172,5 +172,5 @@ def bump(c, part="patch"):
 
 @task(pre=[build])
 def ci(c):
-    """Run local CI subset."""
-    c.run(f"{PYTHON} -m pytest -q", pty=False, warn=True)
+    """Run local CI subset: build, then tests with coverage gate (>80%)."""
+    c.run(f"{PYTHON} -m pytest -q --cov=src/beaconutilities --cov-report=term-missing --cov-fail-under=80", pty=False, warn=False)

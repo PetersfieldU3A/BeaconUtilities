@@ -28,3 +28,6 @@ logs/
 
 # Configuration with credentials
 config/config.ini
+
+# Playwright recorded scripts (may contain plaintext credentials)
+scripts/

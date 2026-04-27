@@ -1,29 +1,119 @@
-# Architecture
+﻿# Architecture
 
 ![U3A Logo](img/u3a-logo.png){style="float: right; max-width: 180px; height: auto; margin: -4.5rem 0 0.5rem 1rem;"}
+
+## Phase I: Beacon → WordPress
+
+The Phase I architecture implements a unidirectional pipeline with an optional local SQLite staging layer:
+
+```
+Beacon Portal
+    │  Playwright (login + Excel download)
+    ▼
+excel_parser  →  BeaconRecord (models)
+    │
+    ├──▶ database (SQLite staging — optional, configurable)
+    │
+    │  mapping
+    ▼
+WordPressClient (wordpress)
+    │  REST API
+    ▼
+WordPress Site
+```
+
+State and logging are cross-cutting concerns present throughout the pipeline.
 
 ## Package Structure
 
 ```
 src/beaconutilities/
     __init__.py       Package metadata and version
-    cli.py            Command line entrypoint
+    cli.py            CLI entrypoint; sync command with --dry-run flag
     config.py         INI/JSON configuration loader
     logging_utils.py  Rotating file + console logging
-    models.py         Data models (BeaconRecord, etc.)
-    mapping.py        Beacon → WordPress field mapping
-    preflight.py      Pre-run validation checks
-    state.py          JSON-backed runtime state
-    sync.py           Sync orchestration
+    models.py         BeaconRecord dataclass; EntityType enum (MEMBER, GROUP)
+    excel_parser.py   Reads Beacon Excel exports into list[dict] per sheet
+    beacon_scraper.py Playwright login + automated Excel download
+    database.py       Optional SQLite staging; configurable session vs. persistent mode
+    mapping.py        BeaconRecord → WordPress REST API payload
+    wordpress.py      WordPress REST API client (upsert by slug)
+    preflight.py      Pre-run configuration validation
+    state.py          JSON-backed runtime state (resumable, auditable)
+    sync.py           Orchestrates the full extract → transform → publish cycle
 ```
+
+## Data Flow
+
+1. **CLI** parses arguments and calls `run_sync(config, dry_run)`.
+2. **Preflight** validates that all required config keys are present for both Beacon and WordPress.
+3. **beacon_scraper** uses Playwright to log in to the Beacon portal and download two Excel files (Members, Groups). Confirmed login flow: accept cookie consent → Select2 site picker (`site_name`) → `#ecUsername` / `#ecPassword` → *Enter* button → *Data export & backup* → click named export link.
+4. **excel_parser** reads each sheet of each file and returns rows as plain dicts keyed by column header.
+5. **sync** constructs `BeaconRecord` instances from the parsed rows, assigning `EntityType.MEMBER` or `EntityType.GROUP`.
+6. **database** (optional) persists all extracted records to a local SQLite file before mapping. Each sync replaces staged rows by default (`persist_across_sessions = false`). Set `true` to accumulate rows across runs.
+7. **mapping** converts each `BeaconRecord` to a WordPress REST API payload dict including a slug derived from the Beacon record ID (idempotency key).
+8. **wordpress** calls `GET /wp-json/wp/v2/{post_type}?slug=...` to check existence, then `POST` or `PUT` accordingly.
+9. **state** persists the sync result summary to `state/state.json`.
 
 ## Configuration
 
 Runtime configuration is stored in `config/config.ini` (gitignored). A template is provided at `config/config.example.ini`.
 
+| Section | Purpose |
+|---|---|
+| `[beacon]` | Portal URL, `site_name` (Select2 dropdown label), username, password |
+| `[beacon_export]` | `members_link_name`, `groups_link_name` (exact export link text), download directory |
+| `[database]` | `enabled`, `path`, `persist_across_sessions` — controls optional SQLite staging |
+| `[wordpress]` | Site URL, username, application password, post types for members and groups |
+
+### Confirmed export link names (Petersfield U3A)
+
+| Export | Link text |
+|--------|-----------|
+| Members | `Members and addresses` |
+| Groups | `Groups, with members, venues` |
+
+## SQLite Staging Database
+
+When `[database] enabled = true`, extracted records are written to a local SQLite file before any WordPress writes. This allows the same download to be reprocessed for multiple scenarios without re-downloading.
+
+The `staged_records` table schema:
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | INTEGER | Auto-increment primary key |
+| `staged_at` | TEXT | ISO timestamp of insert |
+| `entity_type` | TEXT | `member` or `group` |
+| `record_id` | TEXT | Beacon record ID |
+| `fields_json` | TEXT | Full field dict as JSON |
+
+**Session vs. persistent mode:**
+
+| `persist_across_sessions` | Behaviour |
+|--------------------------|-----------|
+| `false` (default) | Table cleared at the start of each sync — only current run's data is present |
+| `true` | Rows accumulate across runs — useful for historical trending |
+
+Live confirmed record counts (2026-04-27): 3,242 members · 1,382 groups · 4,624 staged total.
+
 ## State
 
-Run state is persisted as JSON in `state/state.json` (gitignored). This allows resumable and auditable operation.
+Run state is persisted as JSON in `state/state.json` (gitignored). Structure:
+
+```json
+{
+  "last_sync": {
+    "status": "ok",
+    "members_extracted": 3242,
+    "groups_extracted": 1382,
+    "staged": 4624,
+    "published": 0,
+    "errors": []
+  }
+}
+```
+
+Do not edit this file manually unless you understand the recovery impact.
 
 ## Logging
 
