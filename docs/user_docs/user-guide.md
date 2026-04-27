@@ -31,6 +31,34 @@ cd <InstallPath>
 
 Publishes all extracted Members and Groups to WordPress using slug-based idempotency (safe to re-run).
 
+### Beacon → SQLite dry run
+
+Downloads both Beacon exports and stages every workbook sheet into the local SQLite database — no WordPress interaction required. Useful for validating the download pipeline or inspecting raw Beacon data.
+
+```bash
+.\.venv\Scripts\python.exe -m beaconutilities.cli beacon-sqlite-dry-run
+```
+
+Use `--db-path` to save to an alternative database file:
+
+```bash
+.\.venv\Scripts\python.exe -m beaconutilities.cli beacon-sqlite-dry-run --db-path state\test.db
+```
+
+### Export Member Names
+
+Downloads the Beacon Members export and writes `Member_Names.xlsx` to the output directory configured in `config/config.ini` (`beacon_export.output_dir`). The file contains five columns: `mem_no`, `status`, `title`, `forename`, `surname`.
+
+```bash
+.\.venv\Scripts\python.exe -m beaconutilities.cli export-member-names
+```
+
+Override the output directory for a one-off run:
+
+```bash
+.\.venv\Scripts\python.exe -m beaconutilities.cli export-member-names --output-dir C:\Reports
+```
+
 ## Where the log file is
 
 ```text
@@ -65,17 +93,17 @@ Action:
 2. Check that the Beacon portal URL is correct.
 3. Re-run with `--log-level DEBUG` to see browser interaction detail.
 
-### Missing export URLs
+### Missing export link names
 
 Log signs:
 
-- `ValueError: members_export_url is not configured`
+- `ValueError: members_link_name is not configured`
 
 Action:
 
 1. Run `python -m invoke playwright-record` to open the Beacon portal in a recorded browser session.
-2. Navigate to the Members or Groups export page and copy the URL from the address bar.
-3. Paste the URL into `config/config.ini` under `[beacon_export]`.
+2. Navigate to the *Data export & backup* page and note the exact link text for Members and Groups exports.
+3. Set `members_link_name` and `groups_link_name` in `config/config.ini` under `[beacon_export]`.
 
 ### WordPress API failure
 

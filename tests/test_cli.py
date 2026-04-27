@@ -47,6 +47,38 @@ class TestBuildParser:
         with pytest.raises(SystemExit):
             parser.parse_args(["--log-level", "VERBOSE", "sync"])
 
+    def test_beacon_sqlite_dry_run_command(self):
+        parser = build_parser()
+        args = parser.parse_args(["beacon-sqlite-dry-run"])
+        assert args.command == "beacon-sqlite-dry-run"
+        assert args.db_path is None
+
+    def test_beacon_sqlite_dry_run_db_path_option(self):
+        parser = build_parser()
+        args = parser.parse_args([
+            "beacon-sqlite-dry-run",
+            "--db-path",
+            "state/custom.db",
+        ])
+        assert args.command == "beacon-sqlite-dry-run"
+        assert args.db_path == Path("state/custom.db")
+
+    def test_export_member_names_requires_output_dir(self):
+        parser = build_parser()
+        args = parser.parse_args(["export-member-names"])
+        assert args.command == "export-member-names"
+        assert args.output_dir is None
+
+    def test_export_member_names_output_dir_option(self):
+        parser = build_parser()
+        args = parser.parse_args([
+            "export-member-names",
+            "--output-dir",
+            "exports",
+        ])
+        assert args.command == "export-member-names"
+        assert args.output_dir == Path("exports")
+
 
 class TestMain:
     def test_no_command_prints_help_and_exits_zero(self, capsys):
@@ -107,6 +139,76 @@ class TestMain:
                 "beaconutilities.cli.run_sync",
                 return_value={"status": "preflight_failed"},
             ):
+                with patch("beaconutilities.cli.configure_logging"):
+                    with pytest.raises(SystemExit) as exc_info:
+                        main()
+        assert exc_info.value.code == 1
+
+    def test_beacon_sqlite_dry_run_calls_handler(self, minimal_config):
+        with patch("sys.argv", ["beacon-utilities", "beacon-sqlite-dry-run"]):
+            with patch("beaconutilities.cli.load_config", return_value=minimal_config):
+                with patch(
+                    "beaconutilities.cli.run_beacon_to_sqlite_dry_run",
+                    return_value={"status": "ok"},
+                ) as mock_run:
+                    with patch("beaconutilities.cli.configure_logging"):
+                        main()
+        mock_run.assert_called_once_with(minimal_config)
+
+    def test_beacon_sqlite_dry_run_db_path_override(self, minimal_config):
+        with patch(
+            "sys.argv",
+            ["beacon-utilities", "beacon-sqlite-dry-run", "--db-path", "state/alt.db"],
+        ):
+            with patch("beaconutilities.cli.load_config", return_value=minimal_config):
+                with patch(
+                    "beaconutilities.cli.run_beacon_to_sqlite_dry_run",
+                    return_value={"status": "ok"},
+                ) as mock_run:
+                    with patch("beaconutilities.cli.configure_logging"):
+                        main()
+        cfg = mock_run.call_args[0][0]
+        assert Path(cfg["database"]["path"]) == Path("state/alt.db")
+
+    def test_export_member_names_calls_handler(self, minimal_config):
+        minimal_config["beacon_export"]["output_dir"] = "exports_from_config"
+        with patch(
+            "sys.argv",
+            ["beacon-utilities", "export-member-names"],
+        ):
+            with patch("beaconutilities.cli.load_config", return_value=minimal_config):
+                with patch(
+                    "beaconutilities.cli.run_export_member_names",
+                    return_value={"status": "ok"},
+                ) as mock_run:
+                    with patch("beaconutilities.cli.configure_logging"):
+                        main()
+        _, kwargs = mock_run.call_args
+        assert kwargs["output_dir"] == Path("exports_from_config")
+
+    def test_export_member_names_cli_output_dir_overrides_config(self, minimal_config):
+        minimal_config["beacon_export"]["output_dir"] = "exports_from_config"
+        with patch(
+            "sys.argv",
+            ["beacon-utilities", "export-member-names", "--output-dir", "exports_override"],
+        ):
+            with patch("beaconutilities.cli.load_config", return_value=minimal_config):
+                with patch(
+                    "beaconutilities.cli.run_export_member_names",
+                    return_value={"status": "ok"},
+                ) as mock_run:
+                    with patch("beaconutilities.cli.configure_logging"):
+                        main()
+        _, kwargs = mock_run.call_args
+        assert kwargs["output_dir"] == Path("exports_override")
+
+    def test_export_member_names_exits_when_no_config_and_no_cli_output_dir(self, minimal_config):
+        minimal_config["beacon_export"].pop("output_dir", None)
+        with patch(
+            "sys.argv",
+            ["beacon-utilities", "export-member-names"],
+        ):
+            with patch("beaconutilities.cli.load_config", return_value=minimal_config):
                 with patch("beaconutilities.cli.configure_logging"):
                     with pytest.raises(SystemExit) as exc_info:
                         main()

@@ -29,13 +29,13 @@ State and logging are cross-cutting concerns present throughout the pipeline.
 ```
 src/beaconutilities/
     __init__.py       Package metadata and version
-    cli.py            CLI entrypoint; sync command with --dry-run flag
+    cli.py            CLI entrypoint: sync, beacon-sqlite-dry-run, export-member-names
     config.py         INI/JSON configuration loader
     logging_utils.py  Rotating file + console logging
     models.py         BeaconRecord dataclass; EntityType enum (MEMBER, GROUP)
     excel_parser.py   Reads Beacon Excel exports into list[dict] per sheet
     beacon_scraper.py Playwright login + automated Excel download
-    database.py       Optional SQLite staging; configurable session vs. persistent mode
+    database.py       Workbook-driven SQLite staging; each Excel sheet loaded as its own table
     mapping.py        BeaconRecord → WordPress REST API payload
     wordpress.py      WordPress REST API client (upsert by slug)
     preflight.py      Pre-run configuration validation
@@ -50,7 +50,7 @@ src/beaconutilities/
 3. **beacon_scraper** uses Playwright to log in to the Beacon portal and download two Excel files (Members, Groups). Confirmed login flow: accept cookie consent → Select2 site picker (`site_name`) → `#ecUsername` / `#ecPassword` → *Enter* button → *Data export & backup* → click named export link.
 4. **excel_parser** reads each sheet of each file and returns rows as plain dicts keyed by column header.
 5. **sync** constructs `BeaconRecord` instances from the parsed rows, assigning `EntityType.MEMBER` or `EntityType.GROUP`.
-6. **database** (optional) persists all extracted records to a local SQLite file before mapping. Each sync replaces staged rows by default (`persist_across_sessions = false`). Set `true` to accumulate rows across runs.
+6. **database** (optional) loads every sheet of every downloaded workbook into a local SQLite file. Each sheet becomes its own table (e.g. `members`, `polls`, `groups`, `group_members`, `venues`, `faculties`, `group_ledgers`). Set `persist_across_sessions = false` (default) to drop and recreate tables on each run; `true` to accumulate rows across runs.
 7. **mapping** converts each `BeaconRecord` to a WordPress REST API payload dict including a slug derived from the Beacon record ID (idempotency key).
 8. **wordpress** calls `GET /wp-json/wp/v2/{post_type}?slug=...` to check existence, then `POST` or `PUT` accordingly.
 9. **state** persists the sync result summary to `state/state.json`.
@@ -62,7 +62,7 @@ Runtime configuration is stored in `config/config.ini` (gitignored). A template 
 | Section | Purpose |
 |---|---|
 | `[beacon]` | Portal URL, `site_name` (Select2 dropdown label), username, password |
-| `[beacon_export]` | `members_link_name`, `groups_link_name` (exact export link text), download directory |
+| `[beacon_export]` | `members_link_name`, `groups_link_name` (exact export link text), `download_dir`, `output_dir` (default output directory for exports such as Member_Names.xlsx) |
 | `[database]` | `enabled`, `path`, `persist_across_sessions` — controls optional SQLite staging |
 | `[wordpress]` | Site URL, username, application password, post types for members and groups |
 
@@ -75,26 +75,55 @@ Runtime configuration is stored in `config/config.ini` (gitignored). A template 
 
 ## SQLite Staging Database
 
-When `[database] enabled = true`, extracted records are written to a local SQLite file before any WordPress writes. This allows the same download to be reprocessed for multiple scenarios without re-downloading.
+When `[database] enabled = true`, every sheet of every downloaded workbook is loaded into a local SQLite file. This allows the same download to be reprocessed for multiple output scenarios without re-downloading from Beacon.
 
-The `staged_records` table schema:
+### Table layout
+
+Each worksheet becomes its own table. The table name is the sanitised sheet name (lower-case, alphanumeric only). Two standard columns are prepended:
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | INTEGER | Auto-increment primary key |
-| `staged_at` | TEXT | ISO timestamp of insert |
-| `entity_type` | TEXT | `member` or `group` |
-| `record_id` | TEXT | Beacon record ID |
-| `fields_json` | TEXT | Full field dict as JSON |
+| `_id` | INTEGER | Auto-increment primary key |
+| `_staged_at` | TEXT | `CURRENT_TIMESTAMP` of insert |
+| *(Excel headers)* | TEXT | One column per header in row 1 of the sheet |
 
-**Session vs. persistent mode:**
+### Tables created from live Beacon workbooks
+
+| Workbook | Sheet → Table |
+|----------|---------------|
+| `members.xlsx` | `members`, `polls` |
+| `groups.xlsx` | `groups`, `group_members`, `venues`, `faculties`, `group_ledgers` |
+
+### Session vs. persistent mode
 
 | `persist_across_sessions` | Behaviour |
 |--------------------------|-----------|
-| `false` (default) | Table cleared at the start of each sync — only current run's data is present |
+| `false` (default) | Tables are dropped and recreated on each run — only the current run's data is present |
 | `true` | Rows accumulate across runs — useful for historical trending |
 
-Live confirmed record counts (2026-04-27): 3,242 members · 1,382 groups · 4,624 staged total.
+Live confirmed record counts (2026-04-28): 1,815 member rows across 7 tables from 2 workbooks.
+
+## CLI Commands
+
+Three subcommands are available:
+
+| Command | Description |
+|---------|-------------|
+| `sync [--dry-run]` | Full Beacon → WordPress pipeline (optional SQLite staging, optional dry-run) |
+| `beacon-sqlite-dry-run [--db-path PATH]` | Download Beacon exports and stage all workbook sheets into SQLite. No WordPress writes. |
+| `export-member-names [--output-dir PATH]` | Download Beacon exports and write `Member_Names.xlsx` to the configured output directory. |
+
+### Member Names Export
+
+`export-member-names` produces a single workbook:
+
+| Property | Value |
+|----------|-------|
+| Output file | `Member_Names.xlsx` (in `beacon_export.output_dir` or `--output-dir`) |
+| Worksheet name | `Member Names` |
+| Columns | `mem_no`, `status`, `title`, `forename`, `surname` |
+
+Live output (2026-04-28): 1,815 rows written.
 
 ## State
 

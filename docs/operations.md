@@ -25,6 +25,42 @@ Downloads from Beacon, parses, stages to SQLite (if enabled), and logs every rec
 .venv\Scripts\python.exe -m beaconutilities.cli sync
 ```
 
+## Beacon → SQLite Dry Run
+
+Downloads both Beacon exports and stages every sheet into SQLite without any WordPress interaction. Useful for inspecting data, validating the download pipeline, or populating the database for ad-hoc analysis.
+
+```bash
+.venv\Scripts\python.exe -m beaconutilities.cli beacon-sqlite-dry-run
+```
+
+Override the database path for a one-off run:
+
+```bash
+.venv\Scripts\python.exe -m beaconutilities.cli beacon-sqlite-dry-run --db-path state/test.db
+```
+
+## Member Names Export
+
+Downloads the Beacon Members export and writes `Member_Names.xlsx` to the configured output directory.
+
+```bash
+.venv\Scripts\python.exe -m beaconutilities.cli export-member-names
+```
+
+Override the output directory for a one-off run:
+
+```bash
+.venv\Scripts\python.exe -m beaconutilities.cli export-member-names --output-dir C:\Reports
+```
+
+Output directory resolution order:
+
+1. `--output-dir` CLI flag (if provided)
+2. `beacon_export.output_dir` in `config/config.ini`
+3. Exit 1 with a clear error message if neither is set
+
+The output file is always named `Member_Names.xlsx` with a worksheet called `Member Names` containing five columns: `mem_no`, `status`, `title`, `forename`, `surname`. Live output (2026-04-28): 1,815 rows.
+
 ## Scheduled Runs
 
 ### Windows (Task Scheduler)
@@ -50,7 +86,7 @@ Create a `.plist` in `~/Library/LaunchAgents/` pointing to the Python executable
 
 ## SQLite Staging Database
 
-The optional SQLite staging database (`state/beacon_data.db`) holds all extracted records from the most recent sync. Enable it in `config/config.ini`:
+The optional SQLite staging database (`state/beacon_data.db`) stores every sheet from every downloaded workbook as its own table. Enable it in `config/config.ini`:
 
 ```ini
 [database]
@@ -61,18 +97,27 @@ persist_across_sessions = false
 
 | Option | Default | Effect |
 |--------|---------|--------|
-| `enabled` | `false` | When `true`, all extracted records are written to SQLite before mapping |
+| `enabled` | `false` | When `true`, all workbook sheets are loaded into SQLite |
 | `path` | `state/beacon_data.db` | Location of the SQLite file |
-| `persist_across_sessions` | `false` | `false` = table cleared each sync (session-style); `true` = rows accumulate |
+| `persist_across_sessions` | `false` | `false` = tables dropped and recreated each run; `true` = rows accumulate |
+
+### Tables
+
+| Workbook | Sheet → Table |
+|----------|---------------|
+| `members.xlsx` | `members`, `polls` |
+| `groups.xlsx` | `groups`, `group_members`, `venues`, `faculties`, `group_ledgers` |
+
+Each table has two prepended columns (`_id`, `_staged_at`) followed by one column per Excel header from row 1.
 
 Query the database directly for ad-hoc analysis:
 
 ```bash
 .venv\Scripts\python.exe -c "
-import sqlite3, json
+import sqlite3
 con = sqlite3.connect('state/beacon_data.db')
-for row in con.execute(\"SELECT entity_type, record_id, fields_json FROM staged_records LIMIT 5\"):
-    print(row[0], row[1], json.loads(row[2]))
+for row in con.execute('SELECT mem_no, status, forename, surname FROM members LIMIT 5'):
+    print(row)
 "
 ```
 

@@ -5,9 +5,10 @@ Coordinates the full Phase I Beacon → WordPress workflow:
 1. Preflight validation
 2. Beacon login + Excel export download (via Playwright)
 3. Excel parsing → :class:`~beaconutilities.models.BeaconRecord` lists
-4. Field mapping → WordPress REST API payloads
-5. WordPress upsert (skipped in dry-run mode)
-6. State persistence
+4. Optional SQLite staging — all workbook sheets loaded as tables
+5. Field mapping → WordPress REST API payloads
+6. WordPress upsert (skipped in dry-run mode)
+7. State persistence
 """
 
 from __future__ import annotations
@@ -15,8 +16,10 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import openpyxl
+
 from .beacon_scraper import download_beacon_exports
-from .database import clear_records, store_records
+from .database import load_workbook_to_db
 from .excel_parser import parse_sheet
 from .mapping import map_record
 from .models import BeaconRecord, EntityType
@@ -28,6 +31,8 @@ log = logging.getLogger(__name__)
 
 #: Default path for the runtime state file.
 DEFAULT_STATE_PATH = Path("state/state.json")
+
+_MEMBER_NAME_COLUMNS = ["mem_no", "status", "title", "forename", "surname"]
 
 
 def run_sync(config: dict, dry_run: bool = False) -> dict:
@@ -97,14 +102,17 @@ def run_sync(config: dict, dry_run: bool = False) -> dict:
             db_cfg.get("persist_across_sessions", "false")
         )
         try:
-            if not persist_across_sessions:
-                clear_records(db_path)
-            staged = store_records(db_path, member_records + group_records)
-            result["staged"] = staged
-            log.info(
-                "Staged %d record(s) into %s (persist_across_sessions=%s)",
-                staged,
+            counts = _stage_exports_to_db(
+                export_paths,
                 db_path,
+                persist_across_sessions=persist_across_sessions,
+            )
+            result["staged"] = sum(counts.values())
+            log.info(
+                "Staged %d record(s) into %s (%d table(s), persist_across_sessions=%s)",
+                result["staged"],
+                db_path,
+                len(counts),
                 persist_across_sessions,
             )
         except Exception as exc:
@@ -154,6 +162,110 @@ def run_sync(config: dict, dry_run: bool = False) -> dict:
     return result
 
 
+def run_beacon_to_sqlite_dry_run(config: dict) -> dict:
+    """Download Beacon exports and stage all workbook sheets into SQLite.
+
+    This task does not parse/map/publish data to WordPress and does not update
+    state.json. It is intended as a fast validation and local staging step.
+    """
+    result: dict = {
+        "status": "ok",
+        "members_extracted": 0,
+        "groups_extracted": 0,
+        "staged": 0,
+        "tables": 0,
+        "errors": [],
+    }
+
+    if not preflight_beacon(config):
+        result["status"] = "preflight_failed"
+        return result
+
+    download_dir = Path(config.get("beacon_export", {}).get("download_dir", "downloads"))
+    try:
+        export_paths = download_beacon_exports(config, download_dir)
+    except Exception as exc:
+        log.error("Beacon export failed: %s", exc)
+        result["status"] = "download_failed"
+        result["errors"].append(str(exc))
+        return result
+
+    result["members_extracted"] = _count_rows_in_export(export_paths["members"])
+    result["groups_extracted"] = _count_rows_in_export(export_paths["groups"])
+
+    db_cfg = config.get("database", {})
+    db_path = Path(db_cfg.get("path", "state/beacon_data.db"))
+    persist_across_sessions = _is_truthy(db_cfg.get("persist_across_sessions", "false"))
+    try:
+        counts = _stage_exports_to_db(
+            export_paths,
+            db_path,
+            persist_across_sessions=persist_across_sessions,
+        )
+        result["staged"] = sum(counts.values())
+        result["tables"] = len(counts)
+    except Exception as exc:
+        log.error("Database staging failed: %s", exc)
+        result["status"] = "partial"
+        result["errors"].append(f"db_staging: {exc}")
+
+    return result
+
+
+def run_export_member_names(config: dict, output_dir: Path) -> dict:
+    """Download Beacon exports and write Member_Names.xlsx to output_dir."""
+    result: dict = {
+        "status": "ok",
+        "rows_written": 0,
+        "output_file": str(output_dir / "Member_Names.xlsx"),
+        "errors": [],
+    }
+
+    if not preflight_beacon(config):
+        result["status"] = "preflight_failed"
+        return result
+
+    download_dir = Path(config.get("beacon_export", {}).get("download_dir", "downloads"))
+    try:
+        export_paths = download_beacon_exports(config, download_dir)
+    except Exception as exc:
+        log.error("Beacon export failed: %s", exc)
+        result["status"] = "download_failed"
+        result["errors"].append(str(exc))
+        return result
+
+    members_file = export_paths["members"]
+    try:
+        rows = parse_sheet(members_file, "Members")
+    except KeyError:
+        rows = parse_sheet(members_file, 0)
+    except Exception as exc:
+        result["status"] = "parse_failed"
+        result["errors"].append(str(exc))
+        return result
+
+    missing = [c for c in _MEMBER_NAME_COLUMNS if rows and c not in rows[0]]
+    if missing:
+        result["status"] = "parse_failed"
+        result["errors"].append(f"Missing required member columns: {missing}")
+        return result
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    out_file = output_dir / "Member_Names.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Member Names"
+    ws.append(_MEMBER_NAME_COLUMNS)
+    for row in rows:
+        ws.append([row.get(c) for c in _MEMBER_NAME_COLUMNS])
+    wb.save(out_file)
+    wb.close()
+
+    result["rows_written"] = len(rows)
+    result["output_file"] = str(out_file)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -199,6 +311,35 @@ def _parse_export(
             )
 
     return records
+
+
+def _stage_exports_to_db(
+    export_paths: dict[str, Path],
+    db_path: Path,
+    *,
+    persist_across_sessions: bool,
+) -> dict[str, int]:
+    """Load each downloaded workbook into SQLite and return table row counts."""
+    counts: dict[str, int] = {}
+    for xlsx_path in export_paths.values():
+        counts.update(
+            load_workbook_to_db(
+                db_path,
+                xlsx_path,
+                append=persist_across_sessions,
+            )
+        )
+    return counts
+
+
+def _count_rows_in_export(file_path: Path) -> int:
+    """Count all data rows across all sheets in an export workbook."""
+    from .excel_parser import list_sheets
+
+    total = 0
+    for sheet in list_sheets(file_path):
+        total += len(parse_sheet(file_path, sheet))
+    return total
 
 
 def _is_truthy(value: object) -> bool:

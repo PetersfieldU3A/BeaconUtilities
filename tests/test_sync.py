@@ -12,13 +12,18 @@ from unittest.mock import MagicMock, patch
 import openpyxl
 import pytest
 
-from beaconutilities.sync import run_sync
+from beaconutilities.sync import (
+    run_beacon_to_sqlite_dry_run,
+    run_export_member_names,
+    run_sync,
+)
 
 
-def _write_excel(path: Path, rows: list[list]) -> None:
+def _write_excel(path: Path, rows: list[list], sheet_name: str = "Sheet") -> None:
     """Helper: write a single-sheet .xlsx at *path*."""
     wb = openpyxl.Workbook()
     ws = wb.active
+    ws.title = sheet_name
     for row in rows:
         ws.append(row)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -153,8 +158,8 @@ class TestRunSyncDatabaseStaging:
         }
         members_xlsx = tmp_path / "members.xlsx"
         groups_xlsx = tmp_path / "groups.xlsx"
-        _write_excel(members_xlsx, [["Member No"], ["1001"]])
-        _write_excel(groups_xlsx, [["Group Id"], ["G1"]])
+        _write_excel(members_xlsx, [["Member No"], ["1001"]], sheet_name="members")
+        _write_excel(groups_xlsx, [["Group Id"], ["G1"]], sheet_name="groups")
 
         mock_wp_client = MagicMock()
         mock_wp_client.upsert_post.return_value = {"id": 1}
@@ -178,8 +183,8 @@ class TestRunSyncDatabaseStaging:
         }
         members_xlsx = tmp_path / "members.xlsx"
         groups_xlsx = tmp_path / "groups.xlsx"
-        _write_excel(members_xlsx, [["Member No"], ["1001"]])
-        _write_excel(groups_xlsx, [["Group Id"], ["G1"]])
+        _write_excel(members_xlsx, [["Member No"], ["1001"]], sheet_name="members")
+        _write_excel(groups_xlsx, [["Group Id"], ["G1"]], sheet_name="groups")
 
         with patch(
             "beaconutilities.sync.download_beacon_exports",
@@ -197,9 +202,11 @@ class TestRunSyncDatabaseStaging:
 
         import sqlite3
 
+        # Session mode: DROP+recreate each run — only 1 row per table, 2 total
         with sqlite3.connect(db_path) as conn:
-            row_count = conn.execute("SELECT COUNT(*) FROM staged_records").fetchone()[0]
-        assert row_count == 2
+            mem_count = conn.execute("SELECT COUNT(*) FROM members").fetchone()[0]
+            grp_count = conn.execute("SELECT COUNT(*) FROM groups").fetchone()[0]
+        assert mem_count + grp_count == 2
 
     def test_persistent_mode_accumulates_rows(self, minimal_config, tmp_path):
         db_path = tmp_path / "state" / "beacon_data.db"
@@ -210,8 +217,8 @@ class TestRunSyncDatabaseStaging:
         }
         members_xlsx = tmp_path / "members.xlsx"
         groups_xlsx = tmp_path / "groups.xlsx"
-        _write_excel(members_xlsx, [["Member No"], ["1001"]])
-        _write_excel(groups_xlsx, [["Group Id"], ["G1"]])
+        _write_excel(members_xlsx, [["Member No"], ["1001"]], sheet_name="members")
+        _write_excel(groups_xlsx, [["Group Id"], ["G1"]], sheet_name="groups")
 
         with patch(
             "beaconutilities.sync.download_beacon_exports",
@@ -226,9 +233,11 @@ class TestRunSyncDatabaseStaging:
 
         import sqlite3
 
+        # Persistent mode: append=True — 2 rows per table × 2 tables = 4 total
         with sqlite3.connect(db_path) as conn:
-            row_count = conn.execute("SELECT COUNT(*) FROM staged_records").fetchone()[0]
-        assert row_count == 4
+            mem_count = conn.execute("SELECT COUNT(*) FROM members").fetchone()[0]
+            grp_count = conn.execute("SELECT COUNT(*) FROM groups").fetchone()[0]
+        assert mem_count + grp_count == 4
 
     def test_sets_partial_if_staging_fails(self, minimal_config, tmp_path):
         minimal_config["database"] = {
@@ -248,7 +257,7 @@ class TestRunSyncDatabaseStaging:
             return_value={"members": members_xlsx, "groups": groups_xlsx},
         ):
             with patch("beaconutilities.sync.client_from_config", return_value=mock_wp_client):
-                with patch("beaconutilities.sync.store_records", side_effect=RuntimeError("db down")):
+                with patch("beaconutilities.sync.load_workbook_to_db", side_effect=RuntimeError("db down")):
                     with patch("beaconutilities.sync.save_state"):
                         result = run_sync(minimal_config, dry_run=False)
 
@@ -276,3 +285,87 @@ class TestRunSyncDatabaseStaging:
         mock_save.assert_called_once()
         saved_state = mock_save.call_args[0][1]
         assert "last_sync" in saved_state
+
+
+class TestRunBeaconToSqliteDryRun:
+    def test_stages_downloaded_workbooks(self, minimal_config, tmp_path):
+        db_path = tmp_path / "state" / "beacon_data.db"
+        minimal_config["database"] = {
+            "path": str(db_path),
+            "persist_across_sessions": "false",
+        }
+
+        members_xlsx = tmp_path / "members.xlsx"
+        groups_xlsx = tmp_path / "groups.xlsx"
+        _write_excel(members_xlsx, [["mem_no", "forename"], ["1001", "Alice"]], sheet_name="Members")
+        _write_excel(groups_xlsx, [["gkey", "group_name"], ["G1", "Photography"]], sheet_name="Groups")
+
+        with patch(
+            "beaconutilities.sync.download_beacon_exports",
+            return_value={"members": members_xlsx, "groups": groups_xlsx},
+        ):
+            result = run_beacon_to_sqlite_dry_run(minimal_config)
+
+        assert result["status"] == "ok"
+        assert result["members_extracted"] == 1
+        assert result["groups_extracted"] == 1
+        assert result["staged"] == 2
+        assert result["tables"] == 2
+
+
+class TestRunExportMemberNames:
+    def test_writes_member_names_workbook_with_required_columns(self, minimal_config, tmp_path):
+        members_xlsx = tmp_path / "members.xlsx"
+        groups_xlsx = tmp_path / "groups.xlsx"
+        _write_excel(
+            members_xlsx,
+            [
+                ["mem_no", "status", "title", "forename", "surname", "e-mail"],
+                ["1001", "Current", "Mr", "Alan", "Brown", "a@example.com"],
+                ["1002", "Current", "Ms", "Jane", "Smith", "j@example.com"],
+            ],
+            sheet_name="Members",
+        )
+        _write_excel(groups_xlsx, [["gkey"], ["G1"]], sheet_name="Groups")
+
+        output_dir = tmp_path / "exports"
+        with patch(
+            "beaconutilities.sync.download_beacon_exports",
+            return_value={"members": members_xlsx, "groups": groups_xlsx},
+        ):
+            result = run_export_member_names(minimal_config, output_dir=output_dir)
+
+        assert result["status"] == "ok"
+        assert result["rows_written"] == 2
+
+        out_file = output_dir / "Member_Names.xlsx"
+        assert out_file.exists()
+
+        wb = openpyxl.load_workbook(out_file, read_only=True)
+        assert wb.sheetnames == ["Member Names"]
+        ws = wb["Member Names"]
+        rows = list(ws.iter_rows(values_only=True))
+        wb.close()
+
+        assert rows[0] == ("mem_no", "status", "title", "forename", "surname")
+        assert rows[1] == ("1001", "Current", "Mr", "Alan", "Brown")
+        assert rows[2] == ("1002", "Current", "Ms", "Jane", "Smith")
+
+    def test_fails_when_required_member_columns_are_missing(self, minimal_config, tmp_path):
+        members_xlsx = tmp_path / "members.xlsx"
+        groups_xlsx = tmp_path / "groups.xlsx"
+        _write_excel(
+            members_xlsx,
+            [["mem_no", "forename", "surname"], ["1001", "Alan", "Brown"]],
+            sheet_name="Members",
+        )
+        _write_excel(groups_xlsx, [["gkey"], ["G1"]], sheet_name="Groups")
+
+        with patch(
+            "beaconutilities.sync.download_beacon_exports",
+            return_value={"members": members_xlsx, "groups": groups_xlsx},
+        ):
+            result = run_export_member_names(minimal_config, output_dir=tmp_path)
+
+        assert result["status"] == "parse_failed"
+        assert any("Missing required member columns" in msg for msg in result["errors"])

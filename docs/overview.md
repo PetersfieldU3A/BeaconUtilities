@@ -30,23 +30,39 @@ Phase I delivers a proof-of-concept for the **Beacon → WordPress** workflow:
 - **Beacon Portal + Playwright** (`beacon_scraper`) — Automates login and Excel export download via confirmed named link selectors.
 - **Excel Parser** (`excel_parser`) — Reads downloaded .xlsx files into structured row dicts.
 - **Data Models** (`models`) — `BeaconRecord` with `EntityType` (MEMBER / GROUP).
-- **SQLite Staging** (`database`) — Optional local database for intermediate record storage. Supports session and persistent modes.
+- **SQLite Staging** (`database`) — Workbook-driven local database; each Excel sheet becomes its own table. Supports session and persistent modes.
 - **Field Mapper** (`mapping`) — Maps `BeaconRecord` instances to WordPress REST API payloads.
 - **WordPress Client** (`wordpress`) — Issues create/update requests with idempotent slug-based lookup.
 - **Sync Orchestrator** (`sync`) — Coordinates the full extract → stage → transform → publish cycle.
 - **State Manager** (`state`) — JSON-backed state for resumable, auditable runs.
-- **CLI** (`cli`) — `beacon-utilities sync [--dry-run]` entrypoint.
+- **CLI** (`cli`) — `beacon-utilities sync [--dry-run]`, `beacon-utilities beacon-sqlite-dry-run [--db-path]`, and `beacon-utilities export-member-names [--output-dir]` entrypoints.
 
 ### Workflow
+
+Three independent task paths are available:
+
+**Full sync (`sync`)**
 
 1. Preflight: validate Beacon and WordPress configuration.
 2. Login to Beacon via Playwright and download Members and Groups Excel exports.
 3. Parse each export sheet into `BeaconRecord` instances.
-4. **Optional:** Stage records to the local SQLite database for multi-scenario reprocessing without re-downloading.
+4. **Optional:** Stage all workbook sheets to the local SQLite database (7 tables from 2 workbooks).
 5. Map each record to a WordPress REST API payload.
 6. Dry-run: log payloads, skip WordPress writes.
 7. Live run: upsert each payload to WordPress; record ID is the idempotency slug.
 8. Persist run state to `state/state.json` and log result summary.
+
+**Beacon → SQLite dry run (`beacon-sqlite-dry-run`)**
+
+1. Preflight: validate Beacon configuration.
+2. Download Members and Groups Excel exports.
+3. Load all workbook sheets into SQLite (no WordPress interaction).
+
+**Member Names export (`export-member-names`)**
+
+1. Preflight: validate Beacon configuration.
+2. Download Members Excel export.
+3. Write `Member_Names.xlsx` (columns: mem_no, status, title, forename, surname) to the configured output directory.
 
 ### Live Validation (2026-04-27)
 

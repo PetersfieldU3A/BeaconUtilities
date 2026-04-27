@@ -111,3 +111,43 @@ This appendix is a rolling log of decisions, assumptions, and rationale recorded
 **Impact:** `sync.py` calls `clear_records()` before `store_records()` unless `persist_across_sessions` is truthy.  Both modes have dedicated integration tests.
 
 **Follow-up:** If historical trending is needed, set `persist_across_sessions = true` and implement a periodic archival/pruning strategy.
+
+---
+
+## 2026-04-28 — SQLite Schema: Workbook-Driven (Option 1)
+
+**Decision:** `database.py` was redesigned from a single `staged_records` table (with JSON blob per record) to a workbook-driven schema where each Excel sheet becomes its own SQLite table.
+
+**Rationale:** The JSON-blob approach made ad-hoc querying cumbersome and required a separate schema config. The sheet-per-table design is schema-free (headers drive column names), supports SQL queries directly on native field values, and handles both workbooks uniformly without any additional configuration.
+
+**Impact:** `load_workbook_to_db(db_path, workbook_path, *, append=False)` replaces `init_database`, `store_records`, and `clear_records`. Each table has `_id` (autoincrement PK) and `_staged_at` (timestamp) prepended. Live workbooks produce 7 tables: `members`, `polls`, `groups`, `group_members`, `venues`, `faculties`, `group_ledgers`. All 16 database tests updated.
+
+**Follow-up:** Inspect tables with any SQLite browser; column names match the Excel headers verbatim after sanitisation.
+
+---
+
+## 2026-04-28 — New CLI Tasks: beacon-sqlite-dry-run and export-member-names
+
+**Decision:** Two new CLI subcommands added alongside the existing `sync` command.
+
+**Rationale:** Users need to validate the download pipeline independently of WordPress, and to export specific data slices (e.g. member names for a mailing list) without running the full sync. Independent tasks reduce risk and shorten feedback loops.
+
+**Impact:**
+- `beacon-sqlite-dry-run [--db-path PATH]` — downloads and stages all workbook sheets to SQLite; no WordPress interaction.
+- `export-member-names [--output-dir PATH]` — downloads Members export and writes `Member_Names.xlsx` (worksheet: *Member Names*; columns: `mem_no`, `status`, `title`, `forename`, `surname`). Live run: 1,815 rows written.
+- `sync.py` gains `run_beacon_to_sqlite_dry_run` and `run_export_member_names`; shared `_stage_exports_to_db` helper.
+- `cli.py` gains two new subparsers with optional path overrides.
+
+**Follow-up:** Consider additional export targets (e.g. Groups summary) as further independent tasks.
+
+---
+
+## 2026-04-28 — output_dir Config Parameter
+
+**Decision:** The output directory for file exports is now configurable via `beacon_export.output_dir` in `config.ini`, with a `--output-dir` CLI override per command.
+
+**Rationale:** Hard-coding an output directory reduces flexibility. Config-first with CLI override follows the same pattern used for other path settings and avoids environment-specific paths in source code.
+
+**Impact:** `config/config.ini` and `config/config.example.ini` updated with `output_dir = outputs` under `[beacon_export]`. `export-member-names` resolves the output directory in order: CLI flag → config value → exit 1 with a clear error.
+
+**Follow-up:** Apply the same config-first pattern to any future export commands.

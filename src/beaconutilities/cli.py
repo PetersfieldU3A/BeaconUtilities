@@ -10,11 +10,11 @@ from pathlib import Path
 from . import __version__ as APP_VERSION
 from .config import load_config
 from .logging_utils import DEFAULT_LOG_FILE, DEFAULT_LOG_LEVEL, configure_logging
-from .sync import run_sync
+from .sync import run_beacon_to_sqlite_dry_run, run_export_member_names, run_sync
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 __author__ = "T. J. Willans"
-__date__ = "2026-04-27"
+__date__ = "2026-04-28"
 __copyright__ = "Copyright 2026, MEADC Ltd"
 
 
@@ -57,6 +57,31 @@ def build_parser() -> argparse.ArgumentParser:
             "State is not updated. Recommended before first live run."
         ),
     )
+
+    sqlite_parser = subparsers.add_parser(
+        "beacon-sqlite-dry-run",
+        help="Run Beacon export and stage all workbook sheets into SQLite",
+    )
+    sqlite_parser.add_argument(
+        "--db-path",
+        type=Path,
+        default=None,
+        help="Optional SQLite DB path override (default uses config database.path)",
+    )
+
+    export_parser = subparsers.add_parser(
+        "export-member-names",
+        help="Export Member_Names.xlsx containing selected member columns",
+    )
+    export_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Output directory for Member_Names.xlsx. "
+            "Overrides beacon_export.output_dir in config."
+        ),
+    )
     return parser
 
 
@@ -77,6 +102,32 @@ def main() -> None:
         dry_run: bool = getattr(args, "dry_run", False)
         result = run_sync(cfg, dry_run=dry_run)
         log.info("Sync result: %s", result)
+        if result.get("status") not in ("ok", "partial"):
+            sys.exit(1)
+    elif args.command == "beacon-sqlite-dry-run":
+        db_path: Path | None = getattr(args, "db_path", None)
+        if db_path is not None:
+            cfg.setdefault("database", {})["path"] = str(db_path)
+        result = run_beacon_to_sqlite_dry_run(cfg)
+        log.info("Beacon -> SQLite dry run result: %s", result)
+        if result.get("status") not in ("ok", "partial"):
+            sys.exit(1)
+    elif args.command == "export-member-names":
+        cli_output_dir: Path | None = getattr(args, "output_dir", None)
+        cfg_output_dir = cfg.get("beacon_export", {}).get("output_dir")
+        output_dir: Path | None = cli_output_dir or (
+            Path(cfg_output_dir) if cfg_output_dir else None
+        )
+
+        if output_dir is None:
+            log.error(
+                "No output directory specified. Set beacon_export.output_dir in "
+                "config.ini or pass --output-dir."
+            )
+            sys.exit(1)
+
+        result = run_export_member_names(cfg, output_dir=output_dir)
+        log.info("Member names export result: %s", result)
         if result.get("status") not in ("ok", "partial"):
             sys.exit(1)
 
