@@ -1,0 +1,73 @@
+site_name: Petersfield U3A BeaconUtilities
+site_description: Beacon U3A CRM automation and WordPress integration
+site_url: https://petersfieldu3a.github.io/BeaconUtilities/
+repo_url: https://petersfield.u3asite.uk/
+repo_name: Petersfield U3A Website
+copyright: Copyright 2026, MEADC Ltd
+
+site_dir: site_installer
+use_directory_urls: false
+exclude_docs: |
+  architecture.md
+  development.md
+  operations.md
+  Appendices/**
+
+theme:
+  name: material
+#  logo: img/u3a-logo.png
+  language: en
+  features:
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - search.share
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: "#005AB9"
+      accent: green
+
+markdown_extensions:
+    - codehilite
+    - tables
+    - admonition
+    - toc:
+        permalink: true
+        toc_depth: "2-3"
+    - footnotes
+    - def_list
+    - attr_list
+    - md_in_html
+    - pymdownx.highlight
+    - pymdownx.superfences:
+        custom_fences:
+          - name: mermaid
+            class: mermaid
+            format: !!python/name:pymdownx.superfences.fence_code_format
+    - pymdownx.blocks.details
+    - pymdownx.blocks.caption
+    - pymdownx.fancylists
+    - pymdownx.tasklist:
+        custom_checkbox: true
+        clickable_checkbox: true
+    - pymdownx.tabbed:
+        alternate_style: true
+    - pymdownx.emoji:
+        emoji_generator: !!python/name:materialx.emoji.to_svg
+
+plugins:
+    - search
+    - autorefs
+    - mkdocstrings:
+        handlers:
+          python:
+            options:
+              docstring_style: google
+
+nav:
+  - Home: index.md
+  - Overview: overview.md
+  - User Docs:
+      - Installation: user_docs/installation.md
+      - User Guide: user_docs/user-guide.md

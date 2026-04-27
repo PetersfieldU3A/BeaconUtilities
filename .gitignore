@@ -1,0 +1,30 @@
+# Python cache and build outputs
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.dist-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Tooling outputs
+.pytest_cache/
+.coverage
+htmlcov/
+site/
+site_installer/
+.cache/
+
+# Runtime data
+state/*.json
+state/beacon_browser_profile/
+!state/.gitkeep
+logs/
+
+# Configuration with credentials
+config/config.ini

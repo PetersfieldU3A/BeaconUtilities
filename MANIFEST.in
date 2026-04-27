@@ -1,0 +1,4 @@
+include mkdocs.yml
+graft docs
+include config/config.example.ini
+include config/config.example.json

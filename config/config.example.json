@@ -1,0 +1,12 @@
+{
+  "beacon": {
+    "portal_url": "https://www.u3abeacon.org.uk/",
+    "username": "",
+    "password": ""
+  },
+  "wordpress": {
+    "site_url": "https://petersfield.u3asite.uk",
+    "username": "",
+    "application_password": ""
+  }
+}
