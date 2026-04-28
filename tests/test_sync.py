@@ -309,8 +309,7 @@ class TestRunBeaconToSqliteDryRun:
             result = run_beacon_to_sqlite_dry_run(minimal_config)
 
         assert result["status"] == "ok"
-        assert result["members_extracted"] == 1
-        assert result["groups_extracted"] == 1
+        assert result["table_counts"] == {"members": 1, "groups": 1}
         assert result["staged"] == 2
         assert result["tables"] == 2
 

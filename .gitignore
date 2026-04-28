@@ -25,6 +25,7 @@ state/*.json
 state/beacon_browser_profile/
 !state/.gitkeep
 logs/
+outputs/
 
 # Configuration with credentials
 config/config.ini

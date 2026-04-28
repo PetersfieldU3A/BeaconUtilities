@@ -56,32 +56,21 @@ cat > start-user-docs.sh <<'EOF'
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PORT="${1:-8020}"
-DOCS_DIR="$SCRIPT_DIR/docs"
-PYTHON_EXE="$SCRIPT_DIR/.venv/bin/python"
+DOCS_INDEX="$SCRIPT_DIR/docs/index.html"
 
-if [[ ! -d "$DOCS_DIR" ]]; then
-  echo "Docs folder not found: $DOCS_DIR" >&2
-  exit 1
+if [[ -f "$DOCS_INDEX" ]]; then
+  URL="file://$DOCS_INDEX"
+else
+  URL="https://petersfieldu3a.github.io/BeaconUtilities/"
 fi
-
-if [[ ! -x "$PYTHON_EXE" ]]; then
-  echo "Virtual environment not found. Run install.sh first." >&2
-  exit 1
-fi
-
-URL="http://127.0.0.1:${PORT}"
-echo "Starting user docs at $URL"
-echo "Press Ctrl+C to stop the docs server."
 
 if command -v xdg-open >/dev/null 2>&1; then
-  xdg-open "$URL" >/dev/null 2>&1 || true
+  xdg-open "$URL"
 elif command -v open >/dev/null 2>&1; then
-  open "$URL" >/dev/null 2>&1 || true
+  open "$URL"
+else
+  echo "Open your browser and go to: $URL"
 fi
-
-cd "$DOCS_DIR"
-"$PYTHON_EXE" -m http.server "$PORT"
 EOF
 chmod +x start-user-docs.sh
 

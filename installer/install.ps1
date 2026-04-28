@@ -63,33 +63,13 @@ $backupLauncherPs1 = Join-Path $installRoot "start-beacon-backup.ps1"
 $backupLauncherCmd = Join-Path $installRoot "start-beacon-backup.cmd"
 
 $ps1Content = @'
-param(
-    [int]$Port = 8020
-)
-
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$docsDir = Join-Path $scriptDir "docs"
-$pythonExe = Join-Path $scriptDir ".venv\Scripts\python.exe"
+$docsIndex = Join-Path $scriptDir "docs\index.html"
 
-if (-not (Test-Path $docsDir)) {
-    throw "Docs folder not found: $docsDir"
-}
-
-if (-not (Test-Path $pythonExe)) {
-    throw "Virtual environment not found. Run install.ps1 first."
-}
-
-$url = "http://127.0.0.1:$Port"
-Write-Host "Starting user docs at $url"
-Write-Host "Press Ctrl+C to stop the docs server."
-
-Start-Process $url | Out-Null
-Push-Location $docsDir
-try {
-    & $pythonExe -m http.server $Port
-}
-finally {
-    Pop-Location
+if (Test-Path $docsIndex) {
+    Start-Process $docsIndex
+} else {
+    Start-Process "https://petersfieldu3a.github.io/BeaconUtilities/"
 }
 '@
 Set-Content -Path $docsLauncherPs1 -Value $ps1Content -Encoding utf8

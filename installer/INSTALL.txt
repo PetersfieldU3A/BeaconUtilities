@@ -37,9 +37,8 @@ BeaconUtilities Installer
    macOS / Linux:
    ./start-user-docs.sh
 
-   Optional custom port:
-   Windows: .\start-user-docs.ps1 -Port 8030
-   macOS / Linux: ./start-user-docs.sh 8030
+   Opens docs/index.html directly in the default browser.
+   Falls back to https://petersfieldu3a.github.io/BeaconUtilities/ if docs are not present.
 
 7. Run full Beacon backup using the launcher script created by install:
 

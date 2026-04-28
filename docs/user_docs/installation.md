@@ -95,13 +95,10 @@
     ./start-user-docs.sh
     ```
 
-    Optional custom port:
+    Opens `docs/index.html` directly in the default browser. Falls back to
+    `https://petersfieldu3a.github.io/BeaconUtilities/` if the local docs folder is not present.
 
-    ```text
-    Windows: .\start-user-docs.ps1 -Port 8030
-    Windows (double-clickable): start-user-docs.cmd
-    macOS / Linux: ./start-user-docs.sh 8030
-    ```
+    Windows (double-clickable): `start-user-docs.cmd`
 
 8. Run full Beacon backup using the launcher script created by install:
 

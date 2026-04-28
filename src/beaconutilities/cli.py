@@ -17,7 +17,7 @@ from .sync import (
     run_sync,
 )
 
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 __author__ = "T. J. Willans"
 __date__ = "2026-04-28"
 __copyright__ = "Copyright 2026, MEADC Ltd"
@@ -129,7 +129,16 @@ def main() -> None:
         if db_path is not None:
             cfg.setdefault("database", {})["path"] = str(db_path)
         result = run_beacon_to_sqlite_dry_run(cfg)
-        log.info("Beacon -> SQLite dry run result: %s", result)
+        if result.get("status") in ("ok", "partial"):
+            log.info(
+                "Beacon -> SQLite dry run: %d table(s), %d row(s) staged",
+                result.get("tables", 0),
+                result.get("staged", 0),
+            )
+            for table, count in result.get("table_counts", {}).items():
+                log.info("  %-30s %d rows", table, count)
+        else:
+            log.info("Beacon -> SQLite dry run result: %s", result)
         if result.get("status") not in ("ok", "partial"):
             sys.exit(1)
     elif args.command == "export-member-names":

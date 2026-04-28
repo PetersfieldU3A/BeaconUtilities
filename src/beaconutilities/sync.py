@@ -171,8 +171,7 @@ def run_beacon_to_sqlite_dry_run(config: dict) -> dict:
     """
     result: dict = {
         "status": "ok",
-        "members_extracted": 0,
-        "groups_extracted": 0,
+        "table_counts": {},
         "staged": 0,
         "tables": 0,
         "errors": [],
@@ -191,9 +190,6 @@ def run_beacon_to_sqlite_dry_run(config: dict) -> dict:
         result["errors"].append(str(exc))
         return result
 
-    result["members_extracted"] = _count_rows_in_export(export_paths["members"])
-    result["groups_extracted"] = _count_rows_in_export(export_paths["groups"])
-
     db_cfg = config.get("database", {})
     db_path = Path(db_cfg.get("path", "state/beacon_data.db"))
     persist_across_sessions = _is_truthy(db_cfg.get("persist_across_sessions", "false"))
@@ -203,6 +199,7 @@ def run_beacon_to_sqlite_dry_run(config: dict) -> dict:
             db_path,
             persist_across_sessions=persist_across_sessions,
         )
+        result["table_counts"] = counts
         result["staged"] = sum(counts.values())
         result["tables"] = len(counts)
     except Exception as exc:
