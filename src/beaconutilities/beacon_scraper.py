@@ -146,6 +146,106 @@ def download_beacon_exports(
     return downloaded
 
 
+def download_beacon_backup(
+    config: dict,
+    output_file: Path,
+    backup_link_name: str | None = None,
+) -> Path:
+    """Log in to Beacon and download a single full-backup workbook.
+
+    Args:
+        config: Loaded configuration dictionary.
+        output_file: Destination ``.xlsx`` path for the downloaded backup.
+        backup_link_name: Optional Beacon link text override. If not provided,
+            ``beacon_export.backup_link_name`` is used.
+
+    Returns:
+        Path to the saved backup workbook.
+
+    Raises:
+        RuntimeError: If required values are missing, login fails, or download fails.
+    """
+    beacon_cfg = config["beacon"]
+    export_cfg = config.get("beacon_export", {})
+
+    portal_url = beacon_cfg["portal_url"].rstrip("/")
+    site_name = beacon_cfg.get("site_name", "").strip()
+    username = beacon_cfg["username"]
+    password = beacon_cfg["password"]
+    backup_section_link = export_cfg.get("backup_section_link_name", _EXPORT_SECTION_LINK).strip()
+    backup_link = (
+        backup_link_name
+        or export_cfg.get("backup_download_link_name", "")
+        or export_cfg.get("backup_link_name", "")
+    ).strip()
+
+    if not site_name:
+        raise RuntimeError(
+            "beacon.site_name is not configured in config/config.ini."
+        )
+    if not backup_link:
+        raise RuntimeError(
+            "beacon_export.backup_download_link_name is not configured. "
+            "Run 'invoke playwright-record' to discover the full-backup link text."
+        )
+    if not backup_section_link:
+        raise RuntimeError(
+            "beacon_export.backup_section_link_name is empty. "
+            "Set it to the Beacon navigation link text for the backup page."
+        )
+
+    output_file = Path(output_file)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        context = browser.new_context(accept_downloads=True)
+        page = context.new_page()
+
+        try:
+            log.info("Navigating to Beacon portal: %s", portal_url)
+            page.goto(portal_url, wait_until="networkidle")
+
+            _accept_cookies_if_present(page)
+
+            log.info("Selecting site: %s", site_name)
+            page.locator("#select2-cbSite-container").click()
+            page.get_by_role("searchbox", name="Search").fill(site_name)
+            page.get_by_role("option", name=site_name).click()
+
+            log.info("Logging in as %s", username)
+            page.locator("#ecUsername").fill(username)
+            page.locator("#ecPassword").fill(password)
+            page.get_by_role("button", name="Enter").click()
+            page.wait_for_load_state("networkidle")
+
+            if _is_login_page(page.url):
+                raise RuntimeError(
+                    "Beacon login failed — verify credentials and site_name "
+                    "in config/config.ini"
+                )
+
+            log.info("Downloading full Beacon backup (link: '%s')", backup_link)
+            saved_file = _download_export_from_section(
+                page,
+                backup_section_link,
+                backup_link,
+                output_file,
+            )
+
+            try:
+                page.get_by_role("link", name="Log Out").click()
+                log.info("Logged out successfully")
+            except Exception:
+                log.warning("Logout step failed — session will expire naturally")
+
+            return saved_file
+
+        finally:
+            context.close()
+            browser.close()
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -179,7 +279,17 @@ def _download_export(page, link_name: str, dest: Path) -> Path:
     Raises:
         RuntimeError: If the download fails.
     """
-    page.get_by_role("link", name=_EXPORT_SECTION_LINK).click()
+    return _download_export_from_section(page, _EXPORT_SECTION_LINK, link_name, dest)
+
+
+def _download_export_from_section(
+    page,
+    section_link_name: str,
+    link_name: str,
+    dest: Path,
+) -> Path:
+    """Navigate to a section, download from a named link, then return Home."""
+    page.get_by_role("link", name=section_link_name).click()
     page.wait_for_load_state("networkidle")
 
     with page.expect_download(timeout=60_000) as download_info:
@@ -193,7 +303,6 @@ def _download_export(page, link_name: str, dest: Path) -> Path:
     download.save_as(dest)
     log.info("Saved '%s' export to %s (%d bytes)", link_name, dest, dest.stat().st_size)
 
-    # Return to dashboard so the next _download_export call or logout starts cleanly
     page.get_by_role("link", name="Home").click()
     page.wait_for_load_state("networkidle")
 

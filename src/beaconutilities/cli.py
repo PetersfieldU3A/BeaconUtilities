@@ -10,9 +10,14 @@ from pathlib import Path
 from . import __version__ as APP_VERSION
 from .config import load_config
 from .logging_utils import DEFAULT_LOG_FILE, DEFAULT_LOG_LEVEL, configure_logging
-from .sync import run_beacon_to_sqlite_dry_run, run_export_member_names, run_sync
+from .sync import (
+    run_beacon_full_backup,
+    run_beacon_to_sqlite_dry_run,
+    run_export_member_names,
+    run_sync,
+)
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 __author__ = "T. J. Willans"
 __date__ = "2026-04-28"
 __copyright__ = "Copyright 2026, MEADC Ltd"
@@ -82,6 +87,21 @@ def build_parser() -> argparse.ArgumentParser:
             "Overrides beacon_export.output_dir in config."
         ),
     )
+
+    backup_parser = subparsers.add_parser(
+        "backup-beacon",
+        help="Download full Beacon backup workbook to configured output location",
+    )
+    backup_parser.add_argument(
+        "--output-file",
+        type=Path,
+        default=None,
+        help=(
+            "Output .xlsx file path, or a directory path. "
+            "When a directory is provided, a Beacon-style timestamped filename is used. "
+            "Overrides beacon_export.backup_output_dir in config."
+        ),
+    )
     return parser
 
 
@@ -128,6 +148,12 @@ def main() -> None:
 
         result = run_export_member_names(cfg, output_dir=output_dir)
         log.info("Member names export result: %s", result)
+        if result.get("status") not in ("ok", "partial"):
+            sys.exit(1)
+    elif args.command == "backup-beacon":
+        output_file: Path | None = getattr(args, "output_file", None)
+        result = run_beacon_full_backup(cfg, output_file=output_file)
+        log.info("Beacon full backup result: %s", result)
         if result.get("status") not in ("ok", "partial"):
             sys.exit(1)
 

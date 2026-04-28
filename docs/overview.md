@@ -8,7 +8,7 @@ To programmatically access Beacon, the U3A CRM, and use that data to automatical
 
 ## Phase I Scope
 
-Phase I delivers a proof-of-concept for the **Beacon → WordPress** workflow:
+Phase I delivers a proof-of-concept for the **Beacon → WordPress** workflow, plus supporting Beacon export utilities:
 
 - **In scope:** Members and Groups data only.
 - **Out of scope:** WordPress → Beacon workflows are explicitly deferred to later phases.
@@ -20,8 +20,9 @@ Phase I delivers a proof-of-concept for the **Beacon → WordPress** workflow:
 1. **Beacon Automation** — Use Playwright to log in to Beacon and download Members and Groups data as Excel exports.
 2. **Data Transformation** — Parse Excel exports and map Beacon fields to WordPress REST API payloads.
 3. **WordPress Integration** — Create or update WordPress content via the REST API using an idempotency key derived from Beacon record IDs.
-4. **Reliability** — Robust error handling, dry-run mode, and rotating log files so failures are visible and recoverable.
-5. **Cross-Platform Compatibility** — Operate on Windows 11 and macOS.
+4. **Operational Utilities** — Support Beacon-side exports that do not publish to WordPress, including SQLite staging, member-name workbook generation, and full-backup workbook download.
+5. **Reliability** — Robust error handling, dry-run mode, and rotating log files so failures are visible and recoverable.
+6. **Cross-Platform Compatibility** — Operate on Windows 11 and macOS.
 
 ## System Architecture
 
@@ -35,11 +36,11 @@ Phase I delivers a proof-of-concept for the **Beacon → WordPress** workflow:
 - **WordPress Client** (`wordpress`) — Issues create/update requests with idempotent slug-based lookup.
 - **Sync Orchestrator** (`sync`) — Coordinates the full extract → stage → transform → publish cycle.
 - **State Manager** (`state`) — JSON-backed state for resumable, auditable runs.
-- **CLI** (`cli`) — `beacon-utilities sync [--dry-run]`, `beacon-utilities beacon-sqlite-dry-run [--db-path]`, and `beacon-utilities export-member-names [--output-dir]` entrypoints.
+- **CLI** (`cli`) — `beacon-utilities sync [--dry-run]`, `beacon-utilities beacon-sqlite-dry-run [--db-path]`, `beacon-utilities export-member-names [--output-dir]`, and `beacon-utilities backup-beacon [--output-file]` entrypoints.
 
 ### Workflow
 
-Three independent task paths are available:
+Four independent task paths are available:
 
 **Full sync (`sync`)**
 
@@ -64,6 +65,12 @@ Three independent task paths are available:
 2. Download Members Excel export.
 3. Write `Member_Names.xlsx` (columns: mem_no, status, title, forename, surname) to the configured output directory.
 
+**Full Beacon backup (`backup-beacon`)**
+
+1. Preflight: validate Beacon backup configuration.
+2. Navigate to the configured Beacon backup section and trigger the configured backup download link.
+3. Save the workbook to the configured backup output directory using a Beacon-style timestamped file name such as `202604281322_Petersfield u3abackup.xlsx`, unless an explicit `.xlsx` output path is provided.
+
 ### Live Validation (2026-04-27)
 
 Full dry-run against the Petersfield U3A Beacon portal confirmed:
@@ -71,3 +78,9 @@ Full dry-run against the Petersfield U3A Beacon portal confirmed:
 - Members downloaded: `downloads/members.xlsx` (333,407 bytes)
 - Groups downloaded: `downloads/groups.xlsx` (91,090 bytes)
 - Records staged: 3,242 members · 1,382 groups · **4,624 total**
+
+### Live Backup Validation (2026-04-28)
+
+Full backup run against the Petersfield U3A Beacon portal confirmed:
+
+- Backup downloaded: `outputs/202604281322_Petersfield u3abackup.xlsx` (810,116 bytes)

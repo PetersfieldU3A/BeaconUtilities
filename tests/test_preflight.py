@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from beaconutilities.preflight import preflight_beacon, preflight_wordpress
+from beaconutilities.preflight import (
+    preflight_beacon,
+    preflight_beacon_backup,
+    preflight_wordpress,
+)
 
 
 class TestPreflightBeacon:
@@ -71,3 +75,21 @@ class TestPreflightWordPress:
 
     def test_fails_when_wordpress_section_absent(self):
         assert preflight_wordpress({}) is False
+
+
+class TestPreflightBeaconBackup:
+    def test_passes_with_valid_config(self, minimal_config):
+        assert preflight_beacon_backup(minimal_config) is True
+
+    def test_fails_when_beacon_credentials_missing(self, minimal_config):
+        del minimal_config["beacon"]["password"]
+        assert preflight_beacon_backup(minimal_config) is False
+
+    def test_fails_when_backup_link_name_missing(self, minimal_config):
+        del minimal_config["beacon_export"]["backup_download_link_name"]
+        del minimal_config["beacon_export"]["backup_link_name"]
+        assert preflight_beacon_backup(minimal_config) is False
+
+    def test_passes_with_legacy_backup_link_name_fallback(self, minimal_config):
+        del minimal_config["beacon_export"]["backup_download_link_name"]
+        assert preflight_beacon_backup(minimal_config) is True

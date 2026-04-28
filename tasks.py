@@ -6,13 +6,14 @@ from datetime import date
 import re
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 from invoke import task
 
-__version__ = "0.0.2"
+__version__ = "0.0.4"
 __author__ = "T. J. Willans"
-__date__ = "2026-04-27"
+__date__ = "2026-04-28"
 __copyright__ = "Copyright 2026, MEADC Ltd"
 
 ROOT = Path(__file__).resolve().parent
@@ -174,3 +175,61 @@ def bump(c, part="patch"):
 def ci(c):
     """Run local CI subset: build, then tests with coverage gate (>80%)."""
     c.run(f"{PYTHON} -m pytest -q --cov=src/beaconutilities --cov-report=term-missing --cov-fail-under=80", pty=False, warn=False)
+
+
+@task
+def package(c):
+    """Build user-docs and create dist/beacon_utilities-{version}.zip installer package."""
+    version = _read_version()
+    archive_root = Path("BeaconUtilities")
+
+    # Build user-facing docs
+    c.run(f"{PYTHON} -m mkdocs build -f mkdocs-user.yml", pty=False)
+
+    # Build wheel only (no sdist needed in installer)
+    c.run(f"{PYTHON} -m build --wheel", pty=False)
+
+    dist_dir = ROOT / "dist"
+    dist_dir.mkdir(exist_ok=True)
+
+    zip_path = dist_dir / f"beacon_utilities-{version}.zip"
+
+    wheel_glob = list(dist_dir.glob(f"beacon_utilities-{version}-*.whl"))
+    if not wheel_glob:
+        raise FileNotFoundError(f"No wheel found in dist/ for version {version}")
+    wheel_path = wheel_glob[0]
+
+    site_dir = ROOT / "site_installer"
+    config_example_ini = ROOT / "config" / "config.example.ini"
+    config_example_json = ROOT / "config" / "config.example.json"
+    installer_script = ROOT / "installer" / "install.ps1"
+    installer_script_unix = ROOT / "installer" / "install.sh"
+    launcher_script = ROOT / "installer" / "run.ps1"
+    launcher_script_unix = ROOT / "installer" / "run.sh"
+    installer_readme = ROOT / "installer" / "INSTALL.txt"
+
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.write(wheel_path, archive_root / wheel_path.name)
+
+        for installer_file in (
+            installer_script,
+            installer_script_unix,
+            launcher_script,
+            launcher_script_unix,
+            installer_readme,
+        ):
+            if installer_file.exists():
+                zf.write(installer_file, archive_root / installer_file.name)
+
+        for doc_file in sorted(site_dir.rglob("*")):
+            if doc_file.is_file():
+                zf.write(
+                    doc_file,
+                    archive_root / "docs" / doc_file.relative_to(site_dir),
+                )
+
+        for cfg in (config_example_ini, config_example_json):
+            if cfg.exists():
+                zf.write(cfg, archive_root / "config" / cfg.name)
+
+    print(f"Installer package created: {zip_path}")

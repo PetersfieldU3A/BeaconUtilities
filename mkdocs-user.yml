@@ -11,7 +11,9 @@ exclude_docs: |
   architecture.md
   development.md
   operations.md
-  Appendices/**
+  Appendices/1_DevelopmentNotes.md
+  Appendices/2_DevelopmentProgress.md
+  Appendices/5_ProjectReview.md
 
 theme:
   name: material
@@ -58,12 +60,6 @@ markdown_extensions:
 
 plugins:
     - search
-    - autorefs
-    - mkdocstrings:
-        handlers:
-          python:
-            options:
-              docstring_style: google
 
 nav:
   - Home: index.md
@@ -71,3 +67,6 @@ nav:
   - User Docs:
       - Installation: user_docs/installation.md
       - User Guide: user_docs/user-guide.md
+  - Appendices:
+      - Beacon Interaction: Appendices/3_BeaconInteraction.md
+      - Process Flow: Appendices/4_ProcessFlow.md

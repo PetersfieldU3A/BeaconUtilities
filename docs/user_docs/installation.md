@@ -5,10 +5,131 @@
 ## Prerequisites
 
 - Python 3.11 or later
-- Git
 - Internet access
 
-## Steps
+## End-User Installer (Recommended)
+
+1. Download and extract the latest installer zip, then open the extracted `BeaconUtilities` folder.
+
+2. Run the installer script for your platform:
+
+    Windows:
+
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\install.ps1 -InstallChromium
+    ```
+
+    macOS / Linux:
+
+    ```bash
+    bash ./install.sh --install-chromium
+    ```
+
+3. Configure Beacon and WordPress:
+
+    The installer creates `config/config.ini` from `config.example.ini` if needed.
+
+    Edit `config/config.ini`. Required sections:
+
+    | Section | Key fields |
+    | ------- | ---------- |
+    | `[beacon]` | `portal_url`, `site_name`, `username`, `password` |
+    | `[beacon_export]` | `members_link_name`, `groups_link_name`, `backup_section_link_name`, `backup_download_link_name`, `download_dir`, `backup_output_dir` |
+    | `[wordpress]` | `site_url`, `username`, `application_password` |
+
+4. Verify installation:
+
+    Windows:
+
+    ```powershell
+    .\run.ps1 --help
+    ```
+
+    macOS / Linux:
+
+    ```bash
+    ./run.sh --help
+    ```
+
+5. Test with a dry run:
+
+    Windows:
+
+    ```powershell
+    .\run.ps1 sync --dry-run
+    ```
+
+    macOS / Linux:
+
+    ```bash
+    ./run.sh sync --dry-run
+    ```
+
+    Inspect the log output at `logs/beacon_utilities.log` before your first live run.
+
+6. Run normal operations with the launcher script:
+
+    Windows:
+
+    ```powershell
+    .\run.ps1 sync
+    ```
+
+    macOS / Linux:
+
+    ```bash
+    ./run.sh sync
+    ```
+
+7. Start user docs locally using the launcher script created by install:
+
+    Windows:
+
+    ```powershell
+    .\start-user-docs.ps1
+    ```
+
+    macOS / Linux:
+
+    ```bash
+    ./start-user-docs.sh
+    ```
+
+    Optional custom port:
+
+    ```text
+    Windows: .\start-user-docs.ps1 -Port 8030
+    Windows (double-clickable): start-user-docs.cmd
+    macOS / Linux: ./start-user-docs.sh 8030
+    ```
+
+8. Run full Beacon backup using the launcher script created by install:
+
+    Windows:
+
+    ```powershell
+    .\start-beacon-backup.ps1
+    ```
+
+    macOS / Linux:
+
+    ```bash
+    ./start-beacon-backup.sh
+    ```
+
+    By default the backup is saved in `beacon_export.backup_output_dir` using a Beacon-style timestamped file name such as `202604281322_Petersfield u3abackup.xlsx`.
+
+    Optional output path override:
+
+    ```text
+    Windows: .\start-beacon-backup.ps1 C:\Backups
+    Windows (double-clickable): start-beacon-backup.cmd
+    macOS / Linux: ./start-beacon-backup.sh /tmp/backups
+    ```
+
+    Pass a full `.xlsx` path only when you want to force an exact file name.
+
+## Developer Setup (From Source)
 
 1. Clone the repository:
 
@@ -40,17 +161,17 @@
     copy config\config.example.ini config\config.ini
     ```
 
-    Edit `config\config.ini`.  Required sections:
+    Edit `config\config.ini`. Required sections:
 
     | Section | Key fields |
-    |---------|------------|
-    | `[beacon]` | `portal_url`, `username`, `password` |
-    | `[beacon_export]` | `members_export_url`, `groups_export_url`, `download_dir` |
+    | ------- | ---------- |
+    | `[beacon]` | `portal_url`, `site_name`, `username`, `password` |
+    | `[beacon_export]` | `members_link_name`, `groups_link_name`, `backup_section_link_name`, `backup_download_link_name`, `download_dir`, `backup_output_dir` |
     | `[wordpress]` | `site_url`, `username`, `application_password` |
 
-5. Discover Beacon export URLs:
+5. Discover Beacon export link names:
 
-    The `members_export_url` and `groups_export_url` values are specific to your Beacon organisation.  Use the recording tool to find them:
+    The `members_link_name` and `groups_link_name` values are specific to your Beacon organisation. The full-backup flow can use a different Beacon menu option, so confirm `backup_section_link_name` and `backup_download_link_name` as well. Use the recording tool to find them:
 
     ```bash
     python -m invoke playwright-record

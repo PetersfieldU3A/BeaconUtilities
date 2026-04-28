@@ -6,6 +6,7 @@ offline and without side effects.
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +14,7 @@ import openpyxl
 import pytest
 
 from beaconutilities.sync import (
+    run_beacon_full_backup,
     run_beacon_to_sqlite_dry_run,
     run_export_member_names,
     run_sync,
@@ -369,3 +371,75 @@ class TestRunExportMemberNames:
 
         assert result["status"] == "parse_failed"
         assert any("Missing required member columns" in msg for msg in result["errors"])
+
+
+class TestRunBeaconFullBackup:
+    def test_downloads_backup_to_configured_directory(self, minimal_config, tmp_path):
+        expected = tmp_path / "outputs" / "202604281316_TestU3A u3abackup.xlsx"
+        with patch("beaconutilities.sync.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2026, 4, 28, 13, 16)
+            with patch(
+                "beaconutilities.sync.download_beacon_backup",
+                return_value=expected,
+            ) as mock_download:
+                result = run_beacon_full_backup(minimal_config)
+
+        assert result["status"] == "ok"
+        assert result["output_file"] == str(expected)
+        mock_download.assert_called_once()
+        called_destination = mock_download.call_args[0][1]
+        assert called_destination == expected
+
+    def test_output_file_override_accepts_directory(self, minimal_config, tmp_path):
+        override_dir = tmp_path / "alt-backups"
+        expected = override_dir / "202604281316_TestU3A u3abackup.xlsx"
+        with patch("beaconutilities.sync.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2026, 4, 28, 13, 16)
+            with patch(
+                "beaconutilities.sync.download_beacon_backup",
+                return_value=expected,
+            ) as mock_download:
+                result = run_beacon_full_backup(minimal_config, output_file=override_dir)
+
+        assert result["status"] == "ok"
+        assert result["output_file"] == str(expected)
+        called_destination = mock_download.call_args[0][1]
+        assert called_destination == expected
+
+    def test_output_file_override_accepts_file_path(self, minimal_config, tmp_path):
+        output_file = tmp_path / "backups" / "manual_name.xlsx"
+        with patch(
+            "beaconutilities.sync.download_beacon_backup",
+            return_value=output_file,
+        ) as mock_download:
+            result = run_beacon_full_backup(minimal_config, output_file=output_file)
+
+        assert result["status"] == "ok"
+        assert result["output_file"] == str(output_file)
+        called_destination = mock_download.call_args[0][1]
+        assert called_destination == output_file
+
+    def test_default_backup_filename_sanitizes_invalid_site_name(self, minimal_config, tmp_path):
+        minimal_config["beacon"]["site_name"] = 'Test/U3A: North'
+        expected = tmp_path / "outputs" / "202604281316_Test_U3A_ North u3abackup.xlsx"
+        with patch("beaconutilities.sync.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2026, 4, 28, 13, 16)
+            with patch(
+                "beaconutilities.sync.download_beacon_backup",
+                return_value=expected,
+            ) as mock_download:
+                result = run_beacon_full_backup(minimal_config)
+
+        assert result["status"] == "ok"
+        called_destination = mock_download.call_args[0][1]
+        assert called_destination == expected
+
+    def test_returns_download_failed_on_backup_exception(self, minimal_config):
+        with patch(
+            "beaconutilities.sync.download_beacon_backup",
+            side_effect=RuntimeError("Backup link not found"),
+        ):
+            result = run_beacon_full_backup(minimal_config)
+
+        assert result["status"] == "download_failed"
+        assert "Backup link not found" in result["errors"][0]

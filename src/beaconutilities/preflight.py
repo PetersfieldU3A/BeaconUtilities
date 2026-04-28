@@ -63,3 +63,37 @@ def preflight_wordpress(config: dict) -> bool:
     log.info("WordPress preflight OK")
     return True
 
+
+def preflight_beacon_backup(config: dict) -> bool:
+    """Validate Beacon config for full-workbook backup download.
+
+    Args:
+        config: Loaded configuration dict.
+
+    Returns:
+        ``True`` if all checks pass, ``False`` otherwise.
+    """
+    ok = True
+    beacon_cfg = config.get("beacon", {})
+    missing = [k for k in _REQUIRED_BEACON_KEYS if not beacon_cfg.get(k)]
+    if missing:
+        log.error("Beacon config missing required keys: %s", missing)
+        ok = False
+
+    export_cfg = config.get("beacon_export", {})
+    backup_link = (
+        export_cfg.get("backup_download_link_name")
+        or export_cfg.get("backup_link_name")
+    )
+    if not backup_link:
+        log.error(
+            "beacon_export config missing backup key 'backup_download_link_name' "
+            "(or legacy 'backup_link_name'). "
+            "Run 'invoke playwright-record' to discover the full-backup link text.",
+        )
+        ok = False
+
+    if ok:
+        log.info("Beacon backup preflight OK")
+    return ok
+

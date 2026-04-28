@@ -72,6 +72,31 @@
       }
     },
     {
+      "label": "Package: Installer Zip",
+      "type": "shell",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe -m invoke package",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": false
+      }
+    },
+    {
+      "label": "Release: Build + Installer Zip",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Build: Python Package",
+        "Package: Installer Zip"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": false
+      }
+    },
+    {
       "label": "CI: Local Check",
       "type": "shell",
       "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe -m invoke ci",

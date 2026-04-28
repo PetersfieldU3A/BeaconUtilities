@@ -13,17 +13,18 @@ Coordinates the full Phase I Beacon → WordPress workflow:
 
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 from pathlib import Path
 
 import openpyxl
 
-from .beacon_scraper import download_beacon_exports
+from .beacon_scraper import download_beacon_backup, download_beacon_exports
 from .database import load_workbook_to_db
 from .excel_parser import parse_sheet
 from .mapping import map_record
 from .models import BeaconRecord, EntityType
-from .preflight import preflight_beacon, preflight_wordpress
+from .preflight import preflight_beacon, preflight_beacon_backup, preflight_wordpress
 from .state import load_state, save_state
 from .wordpress import client_from_config
 
@@ -266,6 +267,44 @@ def run_export_member_names(config: dict, output_dir: Path) -> dict:
     return result
 
 
+def run_beacon_full_backup(config: dict, output_file: Path | None = None) -> dict:
+    """Download Beacon full-backup workbook and save it locally.
+
+    This task only downloads a single workbook and does not stage to SQLite,
+    publish to WordPress, or update runtime state.
+    """
+    result: dict = {
+        "status": "ok",
+        "output_file": "",
+        "errors": [],
+    }
+
+    if not preflight_beacon_backup(config):
+        result["status"] = "preflight_failed"
+        return result
+
+    if output_file is None:
+        backup_dir = Path(
+            config.get("beacon_export", {}).get("backup_output_dir", "outputs")
+        )
+        destination = backup_dir / _default_backup_filename(config)
+    else:
+        destination = Path(output_file)
+        if destination.suffix.lower() != ".xlsx":
+            destination = destination / _default_backup_filename(config)
+
+    try:
+        saved_file = download_beacon_backup(config, destination)
+    except Exception as exc:
+        log.error("Beacon full-backup export failed: %s", exc)
+        result["status"] = "download_failed"
+        result["errors"].append(str(exc))
+        return result
+
+    result["output_file"] = str(saved_file)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -340,6 +379,21 @@ def _count_rows_in_export(file_path: Path) -> int:
     for sheet in list_sheets(file_path):
         total += len(parse_sheet(file_path, sheet))
     return total
+
+
+def _default_backup_filename(config: dict) -> str:
+    """Build a Beacon-style timestamped filename for full backups."""
+    timestamp = datetime.now().strftime("%Y%m%d%H%M")
+    site_name = str(config.get("beacon", {}).get("site_name", "Beacon")).strip()
+    site_name = _sanitize_filename_fragment(site_name) or "Beacon"
+    return f"{timestamp}_{site_name} u3abackup.xlsx"
+
+
+def _sanitize_filename_fragment(value: str) -> str:
+    """Remove characters that are invalid in Windows filenames."""
+    invalid_chars = '<>:"/\\|?*'
+    sanitized = "".join("_" if char in invalid_chars else char for char in value)
+    return sanitized.strip().rstrip(".")
 
 
 def _is_truthy(value: object) -> bool:

@@ -17,7 +17,7 @@
 .venv\Scripts\python.exe -m beaconutilities.cli sync --dry-run
 ```
 
-Downloads from Beacon, parses, stages to SQLite (if enabled), and logs every record that *would* be published — no WordPress writes.
+Downloads from Beacon, parses, stages to SQLite (if enabled), and logs every record that *would* be published with no WordPress writes.
 
 ### Live run
 
@@ -25,7 +25,7 @@ Downloads from Beacon, parses, stages to SQLite (if enabled), and logs every rec
 .venv\Scripts\python.exe -m beaconutilities.cli sync
 ```
 
-## Beacon → SQLite Dry Run
+## Beacon -> SQLite Dry Run
 
 Downloads both Beacon exports and stages every sheet into SQLite without any WordPress interaction. Useful for inspecting data, validating the download pipeline, or populating the database for ad-hoc analysis.
 
@@ -61,13 +61,41 @@ Output directory resolution order:
 
 The output file is always named `Member_Names.xlsx` with a worksheet called `Member Names` containing five columns: `mem_no`, `status`, `title`, `forename`, `surname`. Live output (2026-04-28): 1,815 rows.
 
+## Full Beacon Backup Workbook
+
+Downloads a single full-backup workbook from Beacon and saves it locally. The workbook is not loaded into SQLite.
+
+```bash
+.venv\Scripts\python.exe -m beaconutilities.cli backup-beacon
+```
+
+Output location resolution:
+
+1. `--output-file` CLI flag (if provided)
+2. `beacon_export.backup_output_dir` in `config/config.ini` with a timestamped Beacon-style file name such as `202604281322_Petersfield u3abackup.xlsx`
+3. Fallback directory `outputs/` with the same timestamped Beacon-style file name
+
+If `--output-file` points to a directory, BeaconUtilities still uses the timestamped Beacon-style file name inside that directory. If `--output-file` points to an `.xlsx` file, that exact file name is used.
+
+Override for a one-off run:
+
+```bash
+.venv\Scripts\python.exe -m beaconutilities.cli backup-beacon --output-file C:\Backups
+```
+
+Force a specific file name only when needed:
+
+```bash
+.venv\Scripts\python.exe -m beaconutilities.cli backup-beacon --output-file C:\Backups\Beacon_Full_Backup.xlsx
+```
+
 ## Scheduled Runs
 
 ### Windows (Task Scheduler)
 
 Create a task that runs:
 
-```
+```text
 <InstallPath>\.venv\Scripts\python.exe -m beaconutilities.cli sync
 ```
 
@@ -96,15 +124,15 @@ persist_across_sessions = false
 ```
 
 | Option | Default | Effect |
-|--------|---------|--------|
+| ------ | ------- | ------ |
 | `enabled` | `false` | When `true`, all workbook sheets are loaded into SQLite |
 | `path` | `state/beacon_data.db` | Location of the SQLite file |
 | `persist_across_sessions` | `false` | `false` = tables dropped and recreated each run; `true` = rows accumulate |
 
 ### Tables
 
-| Workbook | Sheet → Table |
-|----------|---------------|
+| Workbook | Sheet -> Table |
+| -------- | ------------- |
 | `members.xlsx` | `members`, `polls` |
 | `groups.xlsx` | `groups`, `group_members`, `venues`, `faculties`, `group_ledgers` |
 
@@ -123,12 +151,18 @@ for row in con.execute('SELECT mem_no, status, forename, surname FROM members LI
 
 ## Discovering Beacon Export Link Names
 
-The `members_link_name` and `groups_link_name` values in `[beacon_export]` are the exact link text shown on Beacon's *Data export & backup* page. They have been confirmed for Petersfield U3A:
+The `members_link_name` and `groups_link_name` values are used for Beacon's *Data export & backup* page. The full-backup flow can use a different Beacon option and is configured with `backup_section_link_name` and `backup_download_link_name`.
+
+Live backup verification on 2026-04-28 saved:
+
+- `outputs/202604281322_Petersfield u3abackup.xlsx`
 
 | Key | Value |
-|-----|-------|
+| --- | ----- |
 | `members_link_name` | `Members and addresses` |
 | `groups_link_name` | `Groups, with members, venues` |
+| `backup_section_link_name` | `Data export & backup` (or your backup menu option) |
+| `backup_download_link_name` | `Backup all data` |
 
 For a different U3A organisation, run the recorder and observe the link text clicked:
 

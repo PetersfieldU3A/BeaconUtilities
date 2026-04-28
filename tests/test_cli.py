@@ -79,6 +79,22 @@ class TestBuildParser:
         assert args.command == "export-member-names"
         assert args.output_dir == Path("exports")
 
+    def test_backup_beacon_command(self):
+        parser = build_parser()
+        args = parser.parse_args(["backup-beacon"])
+        assert args.command == "backup-beacon"
+        assert args.output_file is None
+
+    def test_backup_beacon_output_file_option(self):
+        parser = build_parser()
+        args = parser.parse_args([
+            "backup-beacon",
+            "--output-file",
+            "outputs/custom_backup.xlsx",
+        ])
+        assert args.command == "backup-beacon"
+        assert args.output_file == Path("outputs/custom_backup.xlsx")
+
 
 class TestMain:
     def test_no_command_prints_help_and_exits_zero(self, capsys):
@@ -213,4 +229,36 @@ class TestMain:
                     with pytest.raises(SystemExit) as exc_info:
                         main()
         assert exc_info.value.code == 1
+
+    def test_backup_beacon_calls_handler(self, minimal_config):
+        with patch("sys.argv", ["beacon-utilities", "backup-beacon"]):
+            with patch("beaconutilities.cli.load_config", return_value=minimal_config):
+                with patch(
+                    "beaconutilities.cli.run_beacon_full_backup",
+                    return_value={"status": "ok"},
+                ) as mock_run:
+                    with patch("beaconutilities.cli.configure_logging"):
+                        main()
+        _, kwargs = mock_run.call_args
+        assert kwargs["output_file"] is None
+
+    def test_backup_beacon_output_file_override(self, minimal_config):
+        with patch(
+            "sys.argv",
+            [
+                "beacon-utilities",
+                "backup-beacon",
+                "--output-file",
+                "outputs/custom_backup.xlsx",
+            ],
+        ):
+            with patch("beaconutilities.cli.load_config", return_value=minimal_config):
+                with patch(
+                    "beaconutilities.cli.run_beacon_full_backup",
+                    return_value={"status": "ok"},
+                ) as mock_run:
+                    with patch("beaconutilities.cli.configure_logging"):
+                        main()
+        _, kwargs = mock_run.call_args
+        assert kwargs["output_file"] == Path("outputs/custom_backup.xlsx")
 

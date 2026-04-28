@@ -1,0 +1,57 @@
+BeaconUtilities Installer
+
+1. Extract this zip and open the BeaconUtilities folder.
+2. Run the installer script for your platform:
+
+   Windows (PowerShell):
+   powershell -ExecutionPolicy Bypass -File .\install.ps1 -InstallChromium
+
+   macOS / Linux (Terminal):
+   bash ./install.sh --install-chromium
+
+3. Edit config/config.ini with your Beacon and WordPress credentials.
+4. Validate with a dry run:
+
+   Windows:
+   .\run.ps1 sync --dry-run
+
+   macOS / Linux:
+   ./run.sh sync --dry-run
+
+5. Use the launcher wrapper for day-to-day commands:
+
+   Windows:
+   .\run.ps1 --help
+   .\run.ps1 sync
+
+   macOS / Linux:
+   ./run.sh --help
+   ./run.sh sync
+
+6. Start user docs locally using the launcher script created by install:
+
+   Windows:
+   .\start-user-docs.ps1
+   (or double-click start-user-docs.cmd)
+
+   macOS / Linux:
+   ./start-user-docs.sh
+
+   Optional custom port:
+   Windows: .\start-user-docs.ps1 -Port 8030
+   macOS / Linux: ./start-user-docs.sh 8030
+
+7. Run full Beacon backup using the launcher script created by install:
+
+   Windows:
+   .\start-beacon-backup.ps1
+   (or double-click start-beacon-backup.cmd)
+
+   macOS / Linux:
+   ./start-beacon-backup.sh
+
+   Optional output file override:
+   Windows: .\start-beacon-backup.ps1 C:\Backups\Beacon_Full_Backup.xlsx
+   macOS / Linux: ./start-beacon-backup.sh /tmp/backups/beacon_backup.xlsx
+
+If Python is not found, install Python 3.11+ and rerun the installer script.
