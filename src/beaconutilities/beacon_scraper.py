@@ -85,13 +85,15 @@ def download_beacon_exports(
             "to discover the link text for the groups export."
         )
 
+    headless = str(beacon_cfg.get("headless", "true")).strip().lower() not in ("false", "0", "no", "off")
+
     download_dir = Path(download_dir)
     download_dir.mkdir(parents=True, exist_ok=True)
 
     downloaded: dict[str, Path] = {}
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        browser = playwright.chromium.launch(headless=headless)
         context = browser.new_context(accept_downloads=True)
         page = context.new_page()
 
@@ -149,15 +151,15 @@ def download_beacon_exports(
 def download_beacon_backup(
     config: dict,
     output_file: Path,
-    backup_link_name: str | None = None,
+    backup_download_link_name: str | None = None,
 ) -> Path:
     """Log in to Beacon and download a single full-backup workbook.
 
     Args:
         config: Loaded configuration dictionary.
         output_file: Destination ``.xlsx`` path for the downloaded backup.
-        backup_link_name: Optional Beacon link text override. If not provided,
-            ``beacon_export.backup_link_name`` is used.
+        backup_download_link_name: Optional Beacon download link text override.
+            If not provided, ``beacon_export.backup_download_link_name`` is used.
 
     Returns:
         Path to the saved backup workbook.
@@ -174,9 +176,8 @@ def download_beacon_backup(
     password = beacon_cfg["password"]
     backup_section_link = export_cfg.get("backup_section_link_name", _EXPORT_SECTION_LINK).strip()
     backup_link = (
-        backup_link_name
+        backup_download_link_name
         or export_cfg.get("backup_download_link_name", "")
-        or export_cfg.get("backup_link_name", "")
     ).strip()
 
     if not site_name:
@@ -194,11 +195,13 @@ def download_beacon_backup(
             "Set it to the Beacon navigation link text for the backup page."
         )
 
+    headless = str(beacon_cfg.get("headless", "true")).strip().lower() not in ("false", "0", "no", "off")
+
     output_file = Path(output_file)
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        browser = playwright.chromium.launch(headless=headless)
         context = browser.new_context(accept_downloads=True)
         page = context.new_page()
 

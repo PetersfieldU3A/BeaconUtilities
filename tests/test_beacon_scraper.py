@@ -64,6 +64,23 @@ class TestDownloadBeaconExportsValidation:
             },
         }
 
+    def test_headless_false_passed_to_launch(self, tmp_path):
+        from unittest.mock import patch, MagicMock
+        cfg = self._base_config(tmp_path)
+        cfg["beacon"]["headless"] = "false"
+        mock_playwright = MagicMock()
+        mock_browser = MagicMock()
+        mock_playwright.chromium.launch.return_value = mock_browser
+        mock_browser.new_context.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        with patch("beaconutilities.beacon_scraper.sync_playwright") as mock_sp:
+            mock_sp.return_value.__enter__.return_value = mock_playwright
+            mock_sp.return_value.__exit__.return_value = False
+            try:
+                download_beacon_exports(cfg, tmp_path)
+            except Exception:
+                pass
+        mock_playwright.chromium.launch.assert_called_once_with(headless=False)
+
     def test_raises_when_site_name_empty(self, tmp_path):
         cfg = self._base_config(tmp_path)
         cfg["beacon"]["site_name"] = ""
@@ -113,7 +130,6 @@ class TestDownloadBeaconBackupValidation:
             "beacon_export": {
                 "backup_section_link_name": "Data export & backup",
                 "backup_download_link_name": "Backup all data",
-                "backup_link_name": "Backup all data",
             },
         }
 
@@ -123,18 +139,10 @@ class TestDownloadBeaconBackupValidation:
         with pytest.raises(RuntimeError, match="site_name"):
             download_beacon_backup(cfg, tmp_path / "backup.xlsx")
 
-    def test_raises_when_backup_link_name_missing(self, tmp_path):
+    def test_raises_when_backup_download_link_name_missing(self, tmp_path):
         cfg = self._base_config()
         del cfg["beacon_export"]["backup_download_link_name"]
-        del cfg["beacon_export"]["backup_link_name"]
         with pytest.raises(RuntimeError, match="backup_download_link_name"):
-            download_beacon_backup(cfg, tmp_path / "backup.xlsx")
-
-    def test_uses_legacy_backup_link_name_fallback(self, tmp_path):
-        cfg = self._base_config()
-        del cfg["beacon_export"]["backup_download_link_name"]
-        del cfg["beacon"]["site_name"]
-        with pytest.raises(RuntimeError, match="site_name"):
             download_beacon_backup(cfg, tmp_path / "backup.xlsx")
 
 

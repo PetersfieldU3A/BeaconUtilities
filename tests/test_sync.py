@@ -16,6 +16,7 @@ import pytest
 from beaconutilities.sync import (
     run_beacon_full_backup,
     run_beacon_to_sqlite_dry_run,
+    run_export_group_data,
     run_export_member_names,
     run_sync,
 )
@@ -442,3 +443,57 @@ class TestRunBeaconFullBackup:
 
         assert result["status"] == "download_failed"
         assert "Backup link not found" in result["errors"][0]
+
+
+class TestRunExportGroupData:
+    def test_writes_group_data_workbook(self, minimal_config, tmp_path):
+        members_xlsx = tmp_path / "members.xlsx"
+        groups_xlsx = tmp_path / "groups.xlsx"
+        _write_excel(members_xlsx, [["mem_no"], ["1001"]], sheet_name="Members")
+        _write_excel(
+            groups_xlsx,
+            [
+                ["gkey", "group_name", "description"],
+                ["G1", "Photography", "Camera club"],
+                ["G2", "Walking", "Local walks"],
+            ],
+            sheet_name="Groups",
+        )
+
+        output_dir = tmp_path / "exports"
+        with patch(
+            "beaconutilities.sync.download_beacon_exports",
+            return_value={"members": members_xlsx, "groups": groups_xlsx},
+        ):
+            result = run_export_group_data(minimal_config, output_dir=output_dir)
+
+        assert result["status"] == "ok"
+        assert result["rows_written"] == 2
+
+        out_file = output_dir / "Group_Data.xlsx"
+        assert out_file.exists()
+
+        wb = openpyxl.load_workbook(out_file, read_only=True)
+        assert wb.sheetnames == ["Group Data"]
+        ws = wb["Group Data"]
+        rows = list(ws.iter_rows(values_only=True))
+        wb.close()
+
+        assert rows[0] == ("gkey", "group_name", "description")
+        assert rows[1] == ("G1", "Photography", "Camera club")
+        assert rows[2] == ("G2", "Walking", "Local walks")
+
+    def test_returns_parse_failed_when_groups_export_is_invalid(self, minimal_config, tmp_path):
+        members_xlsx = tmp_path / "members.xlsx"
+        groups_xlsx = tmp_path / "groups.xlsx"
+        _write_excel(members_xlsx, [["mem_no"], ["1001"]], sheet_name="Members")
+        groups_xlsx.write_text("not-an-xlsx", encoding="utf-8")
+
+        with patch(
+            "beaconutilities.sync.download_beacon_exports",
+            return_value={"members": members_xlsx, "groups": groups_xlsx},
+        ):
+            result = run_export_group_data(minimal_config, output_dir=tmp_path)
+
+        assert result["status"] == "parse_failed"
+        assert len(result["errors"]) >= 1

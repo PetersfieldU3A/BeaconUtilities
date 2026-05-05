@@ -13,6 +13,7 @@ from .logging_utils import DEFAULT_LOG_FILE, DEFAULT_LOG_LEVEL, configure_loggin
 from .sync import (
     run_beacon_full_backup,
     run_beacon_to_sqlite_dry_run,
+    run_export_group_data,
     run_export_member_names,
     run_sync,
 )
@@ -88,6 +89,20 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    export_groups_parser = subparsers.add_parser(
+        "export-group-data",
+        help="Export Group_Data.xlsx containing rows from the groups export",
+    )
+    export_groups_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Output directory for Group_Data.xlsx. "
+            "Overrides beacon_export.output_dir in config."
+        ),
+    )
+
     backup_parser = subparsers.add_parser(
         "backup-beacon",
         help="Download full Beacon backup workbook to configured output location",
@@ -157,6 +172,24 @@ def main() -> None:
 
         result = run_export_member_names(cfg, output_dir=output_dir)
         log.info("Member names export result: %s", result)
+        if result.get("status") not in ("ok", "partial"):
+            sys.exit(1)
+    elif args.command == "export-group-data":
+        cli_output_dir: Path | None = getattr(args, "output_dir", None)
+        cfg_output_dir = cfg.get("beacon_export", {}).get("output_dir")
+        output_dir: Path | None = cli_output_dir or (
+            Path(cfg_output_dir) if cfg_output_dir else None
+        )
+
+        if output_dir is None:
+            log.error(
+                "No output directory specified. Set beacon_export.output_dir in "
+                "config.ini or pass --output-dir."
+            )
+            sys.exit(1)
+
+        result = run_export_group_data(cfg, output_dir=output_dir)
+        log.info("Group data export result: %s", result)
         if result.get("status") not in ("ok", "partial"):
             sys.exit(1)
     elif args.command == "backup-beacon":

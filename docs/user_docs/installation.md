@@ -9,6 +9,18 @@
 
 ## End-User Installer (Recommended)
 
+### Recommended install location
+
+- Keep the downloaded installer zip in your normal Downloads folder.
+- Extract `BeaconUtilities` into a user-owned documents/work folder.
+- Avoid protected folders such as `Program Files`, `C:\Windows`, `/Applications`, or system directories that may require admin rights.
+
+Suggested locations:
+
+- Windows: `C:\Users\<your-user>\Documents\BeaconUtilities`
+- macOS: `/Users/<your-user>/Documents/BeaconUtilities`
+- Linux: `/home/<your-user>/BeaconUtilities`
+
 1. Download and extract the latest installer zip, then open the extracted `BeaconUtilities` folder.
 
 2. Run the installer script for your platform:
@@ -28,6 +40,7 @@
 3. Configure Beacon and WordPress:
 
     The installer creates `config/config.ini` from `config.example.ini` if needed.
+    See [Appendix 6: Configuration Reference](../Appendices/6_ConfigurationReference.md) for a full description of each configuration key.
 
     Edit `config/config.ini`. Required sections:
 

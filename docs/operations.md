@@ -61,6 +61,28 @@ Output directory resolution order:
 
 The output file is always named `Member_Names.xlsx` with a worksheet called `Member Names` containing five columns: `mem_no`, `status`, `title`, `forename`, `surname`. Live output (2026-04-28): 1,815 rows.
 
+## Group Data Export
+
+Downloads the Beacon Groups export and writes `Group_Data.xlsx` to the configured output directory.
+
+```bash
+.venv\Scripts\python.exe -m beaconutilities.cli export-group-data
+```
+
+Override the output directory for a one-off run:
+
+```bash
+.venv\Scripts\python.exe -m beaconutilities.cli export-group-data --output-dir C:\Reports
+```
+
+Output directory resolution order:
+
+1. `--output-dir` CLI flag (if provided)
+2. `beacon_export.output_dir` in `config/config.ini`
+3. Exit 1 with a clear error message if neither is set
+
+The output file is always named `Group_Data.xlsx` with a worksheet called `Group Data` that contains rows from the Beacon Groups sheet and preserves all available group columns.
+
 ## Full Beacon Backup Workbook
 
 Downloads a single full-backup workbook from Beacon and saves it locally. The workbook is not loaded into SQLite.

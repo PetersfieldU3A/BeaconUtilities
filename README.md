@@ -15,6 +15,20 @@ copy config\config.example.ini config\config.ini
 beacon-utilities --help
 ```
 
+## Installer Location Guidance
+
+For the end-user installer zip:
+
+- Keep the downloaded zip in your normal Downloads folder.
+- Extract `BeaconUtilities` into a user-owned documents/work folder.
+- Avoid protected folders such as `Program Files`, `C:\Windows`, `/Applications`, or other system directories that may require admin rights.
+
+Suggested extraction locations:
+
+- Windows: `C:\Users\<your-user>\Documents\BeaconUtilities`
+- macOS: `/Users/<your-user>/Documents/BeaconUtilities`
+- Linux: `/home/<your-user>/BeaconUtilities`
+
 ## Documentation
 
 Full documentation is built with MkDocs:

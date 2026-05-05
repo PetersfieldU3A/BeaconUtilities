@@ -70,3 +70,4 @@ nav:
   - Appendices:
       - Beacon Interaction: Appendices/3_BeaconInteraction.md
       - Process Flow: Appendices/4_ProcessFlow.md
+      - Configuration Reference: Appendices/6_ConfigurationReference.md

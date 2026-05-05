@@ -114,6 +114,36 @@ macOS / Linux:
 ./run.sh export-member-names --output-dir /tmp/reports
 ```
 
+### Export Group Data
+
+Downloads the Beacon Groups export and writes `Group_Data.xlsx` to the output directory configured in `config/config.ini` (`beacon_export.output_dir`). The workbook contains only group rows from the Groups sheet and preserves all available columns from that sheet.
+
+Windows:
+
+```powershell
+.\run.ps1 export-group-data
+```
+
+macOS / Linux:
+
+```bash
+./run.sh export-group-data
+```
+
+Override the output directory for a one-off run:
+
+Windows:
+
+```powershell
+.\run.ps1 export-group-data --output-dir C:\Reports
+```
+
+macOS / Linux:
+
+```bash
+./run.sh export-group-data --output-dir /tmp/reports
+```
+
 ### Full Beacon Backup Workbook
 
 Downloads the Beacon full backup workbook and saves it to the directory configured in `config/config.ini` (`beacon_export.backup_output_dir`).

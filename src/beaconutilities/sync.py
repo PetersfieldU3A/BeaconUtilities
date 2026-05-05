@@ -264,6 +264,58 @@ def run_export_member_names(config: dict, output_dir: Path) -> dict:
     return result
 
 
+def run_export_group_data(config: dict, output_dir: Path) -> dict:
+    """Download Beacon exports and write Group_Data.xlsx to output_dir."""
+    result: dict = {
+        "status": "ok",
+        "rows_written": 0,
+        "output_file": str(output_dir / "Group_Data.xlsx"),
+        "errors": [],
+    }
+
+    if not preflight_beacon(config):
+        result["status"] = "preflight_failed"
+        return result
+
+    download_dir = Path(config.get("beacon_export", {}).get("download_dir", "downloads"))
+    try:
+        export_paths = download_beacon_exports(config, download_dir)
+    except Exception as exc:
+        log.error("Beacon export failed: %s", exc)
+        result["status"] = "download_failed"
+        result["errors"].append(str(exc))
+        return result
+
+    groups_file = export_paths["groups"]
+    try:
+        rows = parse_sheet(groups_file, "Groups")
+    except KeyError:
+        rows = parse_sheet(groups_file, 0)
+    except Exception as exc:
+        result["status"] = "parse_failed"
+        result["errors"].append(str(exc))
+        return result
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    out_file = output_dir / "Group_Data.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Group Data"
+
+    if rows:
+        columns = list(rows[0].keys())
+        ws.append(columns)
+        for row in rows:
+            ws.append([row.get(c) for c in columns])
+
+    wb.save(out_file)
+    wb.close()
+
+    result["rows_written"] = len(rows)
+    result["output_file"] = str(out_file)
+    return result
+
+
 def run_beacon_full_backup(config: dict, output_file: Path | None = None) -> dict:
     """Download Beacon full-backup workbook and save it locally.
 

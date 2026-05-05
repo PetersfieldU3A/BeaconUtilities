@@ -1,6 +1,18 @@
 BeaconUtilities Installer
 
-1. Extract this zip and open the BeaconUtilities folder.
+Recommended install location:
+
+- Keep the downloaded zip in your normal Downloads folder.
+- Extract BeaconUtilities into a user-owned documents/work folder (avoid protected system folders).
+- Do not install under Program Files, Windows, or other admin-protected locations.
+
+Examples:
+
+- Windows: C:\Users\<your-user>\Documents\BeaconUtilities
+- macOS: /Users/<your-user>/Documents/BeaconUtilities
+- Linux: /home/<your-user>/BeaconUtilities
+
+1. Extract this zip to your chosen location and open the BeaconUtilities folder.
 2. Run the installer script for your platform:
 
    Windows (PowerShell):

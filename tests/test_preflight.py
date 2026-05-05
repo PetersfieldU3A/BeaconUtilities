@@ -85,11 +85,6 @@ class TestPreflightBeaconBackup:
         del minimal_config["beacon"]["password"]
         assert preflight_beacon_backup(minimal_config) is False
 
-    def test_fails_when_backup_link_name_missing(self, minimal_config):
+    def test_fails_when_backup_download_link_name_missing(self, minimal_config):
         del minimal_config["beacon_export"]["backup_download_link_name"]
-        del minimal_config["beacon_export"]["backup_link_name"]
         assert preflight_beacon_backup(minimal_config) is False
-
-    def test_passes_with_legacy_backup_link_name_fallback(self, minimal_config):
-        del minimal_config["beacon_export"]["backup_download_link_name"]
-        assert preflight_beacon_backup(minimal_config) is True

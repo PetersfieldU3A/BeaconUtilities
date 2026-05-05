@@ -81,14 +81,10 @@ def preflight_beacon_backup(config: dict) -> bool:
         ok = False
 
     export_cfg = config.get("beacon_export", {})
-    backup_link = (
-        export_cfg.get("backup_download_link_name")
-        or export_cfg.get("backup_link_name")
-    )
+    backup_link = export_cfg.get("backup_download_link_name")
     if not backup_link:
         log.error(
-            "beacon_export config missing backup key 'backup_download_link_name' "
-            "(or legacy 'backup_link_name'). "
+            "beacon_export config missing backup key 'backup_download_link_name'. "
             "Run 'invoke playwright-record' to discover the full-backup link text.",
         )
         ok = False

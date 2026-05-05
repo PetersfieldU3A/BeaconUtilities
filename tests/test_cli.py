@@ -79,6 +79,22 @@ class TestBuildParser:
         assert args.command == "export-member-names"
         assert args.output_dir == Path("exports")
 
+    def test_export_group_data_requires_output_dir(self):
+        parser = build_parser()
+        args = parser.parse_args(["export-group-data"])
+        assert args.command == "export-group-data"
+        assert args.output_dir is None
+
+    def test_export_group_data_output_dir_option(self):
+        parser = build_parser()
+        args = parser.parse_args([
+            "export-group-data",
+            "--output-dir",
+            "exports",
+        ])
+        assert args.command == "export-group-data"
+        assert args.output_dir == Path("exports")
+
     def test_backup_beacon_command(self):
         parser = build_parser()
         args = parser.parse_args(["backup-beacon"])
@@ -223,6 +239,50 @@ class TestMain:
         with patch(
             "sys.argv",
             ["beacon-utilities", "export-member-names"],
+        ):
+            with patch("beaconutilities.cli.load_config", return_value=minimal_config):
+                with patch("beaconutilities.cli.configure_logging"):
+                    with pytest.raises(SystemExit) as exc_info:
+                        main()
+        assert exc_info.value.code == 1
+
+    def test_export_group_data_calls_handler(self, minimal_config):
+        minimal_config["beacon_export"]["output_dir"] = "exports_from_config"
+        with patch(
+            "sys.argv",
+            ["beacon-utilities", "export-group-data"],
+        ):
+            with patch("beaconutilities.cli.load_config", return_value=minimal_config):
+                with patch(
+                    "beaconutilities.cli.run_export_group_data",
+                    return_value={"status": "ok"},
+                ) as mock_run:
+                    with patch("beaconutilities.cli.configure_logging"):
+                        main()
+        _, kwargs = mock_run.call_args
+        assert kwargs["output_dir"] == Path("exports_from_config")
+
+    def test_export_group_data_cli_output_dir_overrides_config(self, minimal_config):
+        minimal_config["beacon_export"]["output_dir"] = "exports_from_config"
+        with patch(
+            "sys.argv",
+            ["beacon-utilities", "export-group-data", "--output-dir", "exports_override"],
+        ):
+            with patch("beaconutilities.cli.load_config", return_value=minimal_config):
+                with patch(
+                    "beaconutilities.cli.run_export_group_data",
+                    return_value={"status": "ok"},
+                ) as mock_run:
+                    with patch("beaconutilities.cli.configure_logging"):
+                        main()
+        _, kwargs = mock_run.call_args
+        assert kwargs["output_dir"] == Path("exports_override")
+
+    def test_export_group_data_exits_when_no_config_and_no_cli_output_dir(self, minimal_config):
+        minimal_config["beacon_export"].pop("output_dir", None)
+        with patch(
+            "sys.argv",
+            ["beacon-utilities", "export-group-data"],
         ):
             with patch("beaconutilities.cli.load_config", return_value=minimal_config):
                 with patch("beaconutilities.cli.configure_logging"):

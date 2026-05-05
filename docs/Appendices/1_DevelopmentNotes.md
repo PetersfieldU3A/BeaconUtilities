@@ -151,3 +151,67 @@ This appendix is a rolling log of decisions, assumptions, and rationale recorded
 **Impact:** `config/config.ini` and `config/config.example.ini` updated with `output_dir = outputs` under `[beacon_export]`. `export-member-names` resolves the output directory in order: CLI flag → config value → exit 1 with a clear error.
 
 **Follow-up:** Apply the same config-first pattern to any future export commands.
+
+---
+
+## 2026-05-05 — Backup Config Key Simplification
+
+**Decision:** Remove legacy backup key compatibility and use only `backup_download_link_name` for full-backup download link text.
+
+**Rationale:** The application is pre-deployment, so retaining deprecated key paths adds complexity without backward-compatibility benefit.
+
+**Impact:** `backup_link_name` removed from runtime config examples and validation logic. `beacon_scraper.py` and `preflight.py` now reference only `backup_download_link_name`. Related tests were updated to remove legacy fallback scenarios.
+
+**Follow-up:** Keep configuration docs aligned with a single canonical backup key to avoid user ambiguity.
+
+---
+
+## 2026-05-05 — Dedicated Configuration Reference Appendix
+
+**Decision:** Add a detailed configuration appendix covering all `config.ini` sections and keys.
+
+**Rationale:** Installation and operations docs need a single authoritative reference for key meanings, defaults, and required values.
+
+**Impact:** New appendix `docs/Appendices/6_ConfigurationReference.md` created and added to both docs navigation builds (`mkdocs.yml` and `mkdocs-user.yml`). Installation docs now link directly to this appendix during configuration steps.
+
+**Follow-up:** Update this appendix whenever new commands introduce config keys or alter key semantics.
+
+---
+
+## 2026-05-05 — Installer Path Guidance Standardised
+
+**Decision:** Add explicit recommendations for where users should store the installer zip and where to extract the application folder.
+
+**Rationale:** End users need clear guidance to avoid protected system directories that can cause script execution and file write issues.
+
+**Impact:** `installer/INSTALL.txt`, `docs/user_docs/installation.md`, and `README.md` now recommend extracting into user-owned folders (for example Documents/home directories) and avoiding admin-protected paths.
+
+**Follow-up:** Keep platform-specific examples updated if installer behavior changes.
+
+---
+
+## 2026-05-06 — New Utility Command: export-group-data
+
+**Decision:** Implement `export-group-data` as a standalone CLI command to generate a groups-only workbook.
+
+**Rationale:** Group export was already part of the Beacon extraction pipeline; operators also need an independent output artifact similar to `export-member-names`.
+
+**Impact:**
+- New command: `export-group-data [--output-dir PATH]`.
+- New sync orchestrator function `run_export_group_data` writes `Group_Data.xlsx` (worksheet: *Group Data*) from the Groups sheet.
+- Output path resolution matches existing export behavior: CLI `--output-dir` override, else `beacon_export.output_dir`.
+- Unit tests and user/operations documentation updated.
+
+**Follow-up:** Consider additional focused exports (for example venues or group-members subsets) if operational demand emerges.
+
+---
+
+## 2026-05-06 — Process Flow Documentation Refresh
+
+**Decision:** Update process-flow diagrams to include `export-group-data` and adjust Mermaid rendering for readability.
+
+**Rationale:** Command and flow diagrams must reflect executable behavior and remain readable as the command surface grows.
+
+**Impact:** `docs/Appendices/4_ProcessFlow.md` now includes `export-group-data` in command overview and utility flow diagrams, with Mermaid font size set to `18px`.
+
+**Follow-up:** If diagrams become crowded again, split large diagrams into smaller command-specific diagrams instead of increasing global font size.

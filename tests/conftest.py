@@ -30,7 +30,6 @@ def minimal_config(tmp_path: Path) -> dict:
             "groups_link_name": "Groups, with members, venues",
             "backup_section_link_name": "Data export & backup",
             "backup_download_link_name": "Backup all data",
-            "backup_link_name": "Backup all data",
             "download_dir": str(tmp_path / "downloads"),
             "backup_output_dir": str(tmp_path / "outputs"),
         },
